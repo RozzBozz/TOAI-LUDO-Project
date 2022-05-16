@@ -2,7 +2,7 @@ from shutil import move
 import ludopy
 import numpy as np
 import cv2
-from ludopy.player import get_enemy_at_pos, enemy_pos_at_pos
+import AI
 
 game = ludopy.Game()
 winnerFound = False
@@ -59,22 +59,6 @@ while not winnerFound:
         pieceToMoveIndex = None
         # Checks if there are pieces that can be moved
         if len(movePieces) >= 1:
-        
-        # Mads code for state and actions
-        #     states = []
-        #     actions = []
-        #     for i in range(len(player_pieces)):
-        #         pos = player_pieces[i]
-        #         other_pieces = []
-        #         for j in range(len(player_pieces)):
-        #             if j == i:
-        #                 continue
-        #             other_pieces.append(player_pieces[j])
-        #         states.append(input_states.get_state(pos, other_pieces, enemy_pieces))
-        #         actions.append(input_states.get_action(states[i], pos, dice, other_pieces, enemy_pieces))
-        #     print(f"state {states}")
-        #     print(f"actions {actions}")
-        #     print(f"possible rewards {input_states.get_reward(actions[0])} {input_states.get_reward(actions[1])} {input_states.get_reward(actions[2])} {input_states.get_reward(actions[3])}")
             
             # If all pieces are  home, move the first piece out
             if not any(playerPieces):
