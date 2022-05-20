@@ -5,6 +5,17 @@ import cv2
 #import AI
 from ludoHelperFunctions import *
 
+
+## AI-loop should look something like
+# 0. If the game started (again), set the initial state
+# 1. Choose actions and perform
+# 2. Let game progress
+# 3. Update the state
+# 4. Calculate the reward based on this new state
+# 5. Update the value of the old state
+# 6. Repeat 1-5 until game is finished
+
+
 game = ludopy.Game()
 winnerFound = False
 

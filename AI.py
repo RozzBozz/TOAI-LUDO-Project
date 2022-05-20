@@ -40,11 +40,11 @@ class AI:
     def getState(self):
         return self.curState
 
-    def setState(self,playerPieces,enemyPiecesLists):
+    def setState(self,pieces,enemyPieces):
         # Update state based on current board
         newStates = []
-        for piece in playerPieces:
-
+        for index,piece in enumerate(pieces):
+            otherPieces = np.delete(pieces,index)
             # STATE HOME
             # Checks if the piece is home
             if isAtHome(piece):
@@ -54,7 +54,7 @@ class AI:
             # Checks if the piece is in goal
             elif isInGoal(piece):
                 newStates.append(GOAL)
-                
+
             # STATE APPROACHHOME
             # Checks if the piece is in the safe zone before home
             elif isInApproachToGoal(piece):
@@ -62,7 +62,7 @@ class AI:
 
             # STATE DANGER
             # Checks if the piece is in danger
-            elif isInDanger(piece, enemyPiecesLists):
+            elif isInDanger(piece, otherPieces, enemyPieces):
                 newStates.append(DANGER)
 
             # STATE SAFE
@@ -73,34 +73,50 @@ class AI:
         self.prevState = self.curState
         self.curState = newStates
 
-    def selectAction(self,diceRoll,pieces,state):
+    def selectAction(self,diceRoll,pieces,enemyPieces):
         # Select an action based on the epsilon greedy equation
-        # Depends on the dice roll
-        # List of avaliable actions for all pieces
+
+        # Maybe wrap all of this in a nice class in the helper functions file?
+        # This way it can be used when creating semi-random players
+        # Save it for later
+
         avaliableActions = []
         for index,piece in enumerate(pieces):
-            actions = []
+            otherPieces = np.delete(pieces,index)
+            curActions = []
+
             # MOVEOUT
-            # If a six is rolled, the piece can move out from the home-field
-            if piece == 0 and diceRoll == 6:
-                avaliableActions.append(MOVEOUT)
+            # If a six is rolled, the piece can move out from home
+            if canMoveOut(piece,diceRoll):
+                curActions.append(MOVEOUT)
                 continue
         
             # MOVEATTACK
             # If the piece can go to the same space as an enemy piece that is not safe
+            if canAttack(piece,enemyPieces,diceRoll):
+                curActions.append(MOVEATTACK)
 
             # MOVESTAR
-            # If the piece can go to a space containing a star
-            if diceRoll == distToNearestStar(piece):
-                avaliableActions.append(MOVESTAR)
+            # If the piece can go to a space containing a star, where there aren't two enemy pieces
+            if canMoveStar(piece,enemyPieces,diceRoll):
+                curActions.append(MOVESTAR)
 
             # MOVESAFE
-            # If the piece can move to a space with another piece, in the goal zone, 
+            # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
+            if canMoveSafe(piece, otherPieces, diceRoll, enemyPieces):
+                curActions.append(MOVESAFE)
+
+            # MOVEHOME
+            # If the piece can move
+            if canMoveHome(piece,diceRoll):
+                curActions.append(MOVEHOME)
 
             # MOVE
-            # A piece can always move, unless it is home
-            avaliableActions.append(MOVE)
-            actions.extend(avaliableActions)
+            # A piece can always move, unless it is home or in goal
+            if canMove(piece):
+                curActions.append(MOVE)
+
+            avaliableActions[index].append(avaliableActions)
         
         # Select a random value between 0 and 100, if smaller than epsilon, choose a random action
         # Else, choose action with largest Q value
@@ -111,17 +127,6 @@ class AI:
         pass
 
     def updateQTable(self,state,action,reward):
-        pass
-
-    # Don't think i should actually make this function, otherwise the game will have to be passed as well
-    def performOnePass(self):
-        # State, action, reward, state, action
-        # Get current state of AI-player, save it for update
-        # Select an action
-        # Grab Q-value from table
-        # Perform action, transistion to new state
-        # Get reward
-        # Update Q-table
         pass
 
     def saveQTable(self,filename):
