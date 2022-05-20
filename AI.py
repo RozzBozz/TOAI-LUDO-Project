@@ -4,25 +4,26 @@ from ludoHelperFunctions import *
 # States
 HOME = 0
 GOAL = 1
-SAFE = 2
+APPROACHGOAL = 2
 DANGER = 3
-NORMAL = 4
-STATES = [HOME,GOAL,SAFE,DANGER,NORMAL]
+SAFE = 4
+STATES = [HOME,GOAL,APPROACHGOAL,DANGER,SAFE]
 
 # Actions
 MOVEOUT = 0
 MOVEATTACK = 1
 MOVESTAR = 2
 MOVESAFE = 3
-MOVE = 4
-ACTIONS = [MOVEOUT,MOVEATTACK,MOVESTAR,MOVESAFE,MOVE]
+MOVEHOME = 4
+MOVE = 5
+ACTIONS = [MOVEOUT,MOVEATTACK,MOVESTAR,MOVESAFE,MOVEHOME,MOVE]
 
 # Rewards
 
 
 class AI:
 
-    def __init__(self,filename,alpha=0.5,epsilon=0.9):
+    def __init__(self,filename,alpha=0.5,gamma=0.9, epsilon=0.1):
         # Load Q-table file from path
         # If it doesn't exist, allocate a new one
         #self.QTable =
@@ -31,72 +32,43 @@ class AI:
         self.curState = [HOME,HOME,HOME,HOME]
         self.numberOfGamesPlayed = 0
         self.numberOfWins = 0
+        self.winrate = 0
+        self.alpha = alpha
+        self.gamma = gamma
+        self.epsilon = epsilon
 
     def getState(self):
         return self.curState
 
-    def setState(self,playerPieces,enemyPieces):
+    def setState(self,playerPieces,enemyPiecesLists):
         # Update state based on current board
         newStates = []
-        for index,piece in enumerate(playerPieces):
-            inDanger = False
-            otherPieces = playerPieces
-            otherPieces.pop(index)
+        for piece in playerPieces:
 
             # STATE HOME
-            # If the index of the piece is zero, the piece is home
-            if piece == 0:
+            # Checks if the piece is home
+            if isAtHome(piece):
                 newStates.append(HOME)
-                continue
 
             # STATE GOAL
-            # If the index of the piece is at the end, the piece is in goal
-            if piece == 59:
+            # Checks if the piece is in goal
+            elif isInGoal(piece):
                 newStates.append(GOAL)
-                continue
-
-            # STATE SAFE
-            # If the piece is at one of globes that is not one of the other player home goals, it is safe
-            if piece == 1 or piece == 9 or piece == 22 or piece == 35 or piece == 48:
-                newStates.append(SAFE)
-                continue
-            # If the piece is in the approach to the goal, it is also safe
-            if piece >= 53 and piece < 59:
-                newStates.append(SAFE)
-                continue
-            # If the piece is at the same index as one of the other pieces, it is also safe.
-            # Doesn't include home or goal indicies
-            if piece in otherPieces:
-                newStates.append(SAFE)
-                continue
-            # If the piece is at one of the enemy home globes, and no enemy pieces are home, then it is safe
-            # TODO
+                
+            # STATE APPROACHHOME
+            # Checks if the piece is in the safe zone before home
+            elif isInApproachToGoal(piece):
+                newStates.append(APPROACHGOAL)
 
             # STATE DANGER
-            # TODO: A SPECIAL CASE HAS TO MADE IF IT IS STANDING ON A STAR
-            # If the piece is range of an enemy piece, then it is in danger
-            if piece >= 7:
-                for i in range((piece-6),piece):
-                    enemiesPresent,_ = get_enemy_at_pos(i,enemyPieces)
-                    if enemiesPresent != -1:
-                        inDanger = True
-                        break
-            else:
-                for i in range((piece-6),piece):
-                    if i <= 0:
-                        enemiesPresent,_ = get_enemy_at_pos((52+i),enemyPieces)
-                    else:
-                        enemiesPresent,_ = get_enemy_at_pos(i,enemyPieces)
-                    if enemiesPresent != -1:
-                        inDanger = True
-                        break
-            if inDanger == True:
+            # Checks if the piece is in danger
+            elif isInDanger(piece, enemyPiecesLists):
                 newStates.append(DANGER)
-                continue
 
-            # STATE NORMAL
-            # If no of the other states apply, the state of the current piece is normal
-            newStates.append(NORMAL)
+            # STATE SAFE
+            # If no of the other states apply, the state of the current piece is safe
+            else:
+                newStates.append(SAFE)
         # Update the states
         self.prevState = self.curState
         self.curState = newStates

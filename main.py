@@ -2,7 +2,8 @@ from shutil import move
 import ludopy
 import numpy as np
 import cv2
-import AI
+#import AI
+from ludoHelperFunctions import *
 
 game = ludopy.Game()
 winnerFound = False
@@ -43,11 +44,11 @@ while not winnerFound:
     allPieces = np.append(enemyPieces, [playerPieces], axis=0)
 
     # The first player (index 0) starts a round
-    # If it is the first round, account for the fact, that the dice may be cast up to three times or until a siz is rolled, whichever comes first
-    if curPlayer == 0:
-        if curPlayer != prevPlayer:
-            round = round + 1
-            print(f"-------------------- ROUND {round} --------------------")
+    # If it is the first round, account for the fact, that the dice may be cast up to three times or until a six is rolled, whichever comes first
+    if curPlayer == 0 and curPlayer != prevPlayer:
+        round = round + 1
+        print(f"-------------------- ROUND {round} --------------------")
+    prevPlayer = curPlayer
 
     # Player 4 (index 3) is the real player (chosen so it matches with the video produced)
     # An input is chosen if it is the real players turn
@@ -61,37 +62,42 @@ while not winnerFound:
         if len(movePieces) >= 1:
             
             # If all pieces are  home, move the first piece out
-            if not any(playerPieces):
+            """             
+                if not any(playerPieces):
                 print("All pieces are home, so moving piece number 1 into the field")
                 pieceToMoveIndex = movePieces[0]
             # If only one piece can be moved, move it
             elif len(movePieces) == 1:
                 print(f"You can only move piece {movePieces+1} located at board index {playerPieces[movePieces[0]]}, so moving that")
                 pieceToMoveIndex = movePieces[0]
-            else:
-                print("Choose one of the following pieces to move, by pressing the corresponding number on your keyboard")
-                for pieceNumber in movePieces:
-                    print(f"Piece {pieceNumber+1} located at index {playerPieces[pieceNumber]}")
-                img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round)
-                img = cv2.resize(img, (1088,900))
-                cv2.imshow("Current state of the board", img)
-                # Create list of key values that correspond to the key value needed to move the piece at the same index in the movePieces list
-                moveKeys = []
-                for i in range(len(movePieces)):
-                    moveKeys.append((movePieces[i] + ONEKEY))
-                # Wait until any key is pressed
-                while pieceToMoveIndex == None:
-                    key = cv2.waitKey(0)
-                    # Check if a valid key is chosen
-                    if key in moveKeys:
-                        print(f"Moving piece number {key-ONEKEY+1}")
-                        cv2.destroyWindow("Current state of the board")
-                        for moveIndex,moveKey in enumerate(moveKeys):
-                            if key == moveKey:
-                                pieceToMoveIndex = movePieces[moveIndex]
-                                break
-                    else:
-                        print(f"Read key value {key}, expected on of the following possibilites: {moveKeys}. Try again")
+            else: """
+            print("-----Enemy pieces:-----\n", enemyPieces)
+            for index,piece in enumerate(playerPieces):
+                otherPieces = np.delete(playerPieces,index)
+                print("Piece", index+1, "Danger: ", isInDanger(piece,otherPieces,enemyPieces))
+            print("Choose one of the following pieces to move, by pressing the corresponding number on your keyboard")
+            for pieceNumber in movePieces:
+                print(f"Piece {pieceNumber+1} located at index {playerPieces[pieceNumber]}")
+            img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round)
+            img = cv2.resize(img, (1088,900))
+            cv2.imshow("Current state of the board", img)
+            # Create list of key values that correspond to the key value needed to move the piece at the same index in the movePieces list
+            moveKeys = []
+            for i in range(len(movePieces)):
+                moveKeys.append((movePieces[i] + ONEKEY))
+            # Wait until any key is pressed
+            while pieceToMoveIndex == None:
+                key = cv2.waitKey(0)
+                # Check if a valid key is chosen
+                if key in moveKeys:
+                    print(f"Moving piece number {key-ONEKEY+1}")
+                    cv2.destroyWindow("Current state of the board")
+                    for moveIndex,moveKey in enumerate(moveKeys):
+                        if key == moveKey:
+                            pieceToMoveIndex = movePieces[moveIndex]
+                            break
+                else:
+                    print(f"Read key value {key}, expected on of the following possibilites: {moveKeys}. Try again")
         else:
             pieceToMoveIndex = -1   
     else:
