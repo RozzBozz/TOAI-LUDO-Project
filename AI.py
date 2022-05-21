@@ -1,3 +1,4 @@
+from lib2to3.refactor import MultiprocessingUnsupported
 from ludopy.player import get_enemy_at_pos
 from ludoHelperFunctions import *
 
@@ -10,16 +11,16 @@ SAFE = 4
 STATES = [HOME,GOAL,APPROACHGOAL,DANGER,SAFE]
 
 # Actions
-MOVEOUT = 0
-MOVEATTACK = 1
-MOVESTAR = 2
-MOVESAFE = 3
-MOVEHOME = 4
+#MOVEOUT = 0
+MOVESAFE = 0
+MOVESTAR = 1
+MOVEHOME = 2
+MOVEATTACK = 3
+MOVESUICIDE = 4
 MOVE = 5
-ACTIONS = [MOVEOUT,MOVEATTACK,MOVESTAR,MOVESAFE,MOVEHOME,MOVE]
+ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE]
 
 # Rewards
-
 
 class AI:
 
@@ -40,7 +41,7 @@ class AI:
     def getState(self):
         return self.curState
 
-    def setState(self,pieces,enemyPieces):
+    def updateState(self,pieces,enemyPieces):
         # Update state based on current board
         newStates = []
         for index,piece in enumerate(pieces):
@@ -80,43 +81,7 @@ class AI:
         # This way it can be used when creating semi-random players
         # Save it for later
 
-        avaliableActions = []
-        for index,piece in enumerate(pieces):
-            otherPieces = np.delete(pieces,index)
-            curActions = []
-
-            # MOVEOUT
-            # If a six is rolled, the piece can move out from home
-            if canMoveOut(piece,diceRoll):
-                curActions.append(MOVEOUT)
-                continue
-        
-            # MOVEATTACK
-            # If the piece can go to the same space as an enemy piece that is not safe
-            if canAttack(piece,enemyPieces,diceRoll):
-                curActions.append(MOVEATTACK)
-
-            # MOVESTAR
-            # If the piece can go to a space containing a star, where there aren't two enemy pieces
-            if canMoveStar(piece,enemyPieces,diceRoll):
-                curActions.append(MOVESTAR)
-
-            # MOVESAFE
-            # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
-            if canMoveSafe(piece, otherPieces, diceRoll, enemyPieces):
-                curActions.append(MOVESAFE)
-
-            # MOVEHOME
-            # If the piece can move
-            if canMoveHome(piece,diceRoll):
-                curActions.append(MOVEHOME)
-
-            # MOVE
-            # A piece can always move, unless it is home or in goal
-            if canMove(piece):
-                curActions.append(MOVE)
-
-            avaliableActions[index].append(avaliableActions)
+        actions = getAvaliableActions(pieces,diceRoll,enemyPieces)
         
         # Select a random value between 0 and 100, if smaller than epsilon, choose a random action
         # Else, choose action with largest Q value
@@ -132,3 +97,49 @@ class AI:
     def saveQTable(self,filename):
         # Save to class Q-table to a file
         pass
+
+def getAvaliableActions(pieces, diceRoll, enemyPieces):
+    """
+    Returns avaliable actions for all pieces in list of lists. All pieces will have zero or more actions
+    """
+    avaliableActions = [[],[],[],[]]
+    for index,piece in enumerate(pieces):
+        otherPieces = np.delete(pieces,index)
+
+        # MOVEOUT
+        # If a six is rolled, the piece can move out from home
+        #if canMoveOut(piece,diceRoll):
+        #    avaliableActions[index].append(MOVEOUT)
+        #    continue
+    
+        # MOVESAFE
+        # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
+        if canMoveSafe(piece, otherPieces, diceRoll, enemyPieces):
+            avaliableActions[index].append(MOVESAFE)
+
+        # MOVESTAR
+        # If the piece can go to a space containing a star, where there aren't two enemy pieces
+        if canMoveStar(piece,diceRoll,enemyPieces):
+            avaliableActions[index].append(MOVESTAR)
+
+        # MOVEHOME
+        # If the piece can move
+        if canMoveHome(piece,diceRoll,enemyPieces):
+            avaliableActions[index].append(MOVEHOME)
+
+        # MOVEATTACK
+        # If the piece can go to the same space as an enemy piece that is not safe
+        if canAttack(piece,diceRoll,enemyPieces):
+            avaliableActions[index].append(MOVEATTACK)
+
+        # MOVESUICIDE
+        # If the piece can move to a tile that results in it being knocked home
+        if canSuicide(piece,diceRoll,enemyPieces):
+            avaliableActions[index].append(MOVESUICIDE)
+
+        # MOVE
+        # A piece can always move if no other move are avaliable, and it is not at home or in goal
+        if canMove(piece) and len(avaliableActions[index]) == 0:
+            avaliableActions[index].append(MOVE)
+
+    return avaliableActions

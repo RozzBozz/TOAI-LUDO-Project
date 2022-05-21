@@ -20,7 +20,7 @@ def isInApproachToGoal(piece):
     Input:  piece (int) Index of piece to check
     Output: (bool) True if in approach to the goal, False otherwise
     """
-    if piece >= 53 and piece < 59:
+    if piece > 52 and piece < 57:
         return True
     else:
         return False
@@ -227,24 +227,33 @@ def numberOfEnemiesAtTile(tile,enemyPieces):
     _, enemyPieceNumber = get_enemy_at_pos(tile,enemyPieces)
     return len(enemyPieceNumber)
 
-def canAttack(piece, enemyPieces, diceRoll):
+def canAttack(piece, diceRoll, enemyPieces):
     """
-    Check if the piece can move to an enemy piece that is not safe
+    Check if the piece can move to an enemy piece that is not safe. This can happen in three ways
+    1. If the next tile is not a star, and there is one enemy on it
+    2. If the next tile is a star, and there is one enemy on either tile
+    3. If the piece is at home and can move out and there is an enemy on the home globe
     Input:  piece (int) Index of the piece to check
             enemyPieces (list of lists of int) List of lists of the enemy pieces to check for (use enemyPieces from game.get_observation)
             diceRoll (int) What the dice rolled
     Output (bool) True if the piece can attack an enemy piece, False otherwise
     """
 
+    if piece == 0 and not canMoveOut(piece,diceRoll):
+        return False
+    # If the piece is at home, can move out, and one enemy piece is on the home globe, it can attack
+    elif canMoveOut(piece,diceRoll) and numberOfEnemiesAtTile(1,enemyPieces) == 1:
+        return True
+    
     nextTile = piece + diceRoll
-    # Piece cannot attack if at home, at goal or approaching goal, or if the next tile is a globe
-    if not isAtHome(piece) and not isInApproachToGoal(piece) and not isInGoal(piece) and not isOnNormalGlobe(nextTile) and not isOnEnemyHomeGlobe(nextTile):
+    # Piece cannot attack if at goal or approaching goal, or if the next tile is a globe, unless it is home globe
+    if not isInApproachToGoal(piece) and not isInGoal(piece) and not isOnNormalGlobe(nextTile) and not isOnEnemyHomeGlobe(nextTile):
         # If the next tile is not a star, and there is one enemy on it, the piece can attack
         if not isOnStar(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 1:
             return True
         # If the next tile is a star, and either of the  tiles have one enemy on it, it can attack
         elif isOnStar(nextTile) and (numberOfEnemiesAtTile(nextTile,enemyPieces) == 1 or numberOfEnemiesAtTile(nextStar(nextTile),enemyPieces) == 1):
-            return True   
+            return True
     return False
 
 def canMove(piece):
@@ -258,7 +267,7 @@ def canMove(piece):
     else:
         return True
 
-def canMoveStar(piece,enemyPieces,diceRoll):
+def canMoveStar(piece,diceRoll,enemyPieces):
     """
     Checks if the piece can go safely, i.e without being knocked home, to the nearest star with the current dice roll.
     Input:  piece (int) Index of the piece to check
@@ -267,17 +276,15 @@ def canMoveStar(piece,enemyPieces,diceRoll):
     Output (bool) True if the piece can move to the nearest star safely, False otherwise
     """
 
-    # Cannot move to the next star 
-
     nextTile = piece + diceRoll
-    # Piece cannot move to a star if the next tile is ot a star, or it is home, in approach to goal or in goal
+    # Piece cannot move to a star if the next tile is not a star, or it is home, in approach to goal or in goal
     if nextTile == nextStar(piece) and not isAtHome(piece) and not isInApproachToGoal(piece) and not isInGoal(piece):
         # Check that both star tiles are safe to land on
         if numberOfEnemiesAtTile(nextTile,enemyPieces) < 2 and numberOfEnemiesAtTile(nextStar(nextTile),enemyPieces) < 2:
             return True
     return False
 
-def canMoveHome(piece,diceRoll):
+def canMoveHome(piece,diceRoll,enemyPieces):
     """
     Checks if the piece can go to the goal
     Input:  piece (int) Index of the piece to check
@@ -285,43 +292,66 @@ def canMoveHome(piece,diceRoll):
     Output (bool) True if the piece can move to the goal, False otherwise
     """
     tile = piece + diceRoll
-    # If the new tile matches the goal tile or the last star, it can move to goal
-    if tile == 59 or tile == 51:
+    # If the new tile matches the goal tile or the last star and there are fewer tahn two enemies there, it can move to goal
+    if tile == 59 or tile == 51 and numberOfEnemiesAtTile(tile,enemyPieces) < 2:
         return True
     else:
         return False
 
 def canMoveSafe(piece,otherPieces,diceRoll,enemyPieces):
     """
-    Checks if the piece can move to the next tile such that it is safe, which can be achieved in four ways:
-    1. Go to neutral globe with no enemies
-    2. Go to another friendly piece
-    3. Go to the goal zone
-    4. Go an enemy globe who doesn't have anymore pieces home
-    5. Go to a star, which leads to another friendly piece
+    Checks if the piece can move to the next tile such that it is safe, which can be achieved in six ways:
+    1. Go to own home globe
+    2. Go to neutral globe with no enemies
+    3. Go to another friendly piece, who is not on a star
+    4. Go to the goal zone
+    5. Go an enemy globe who doesn't have anymore pieces home
+    6. Go to a star, which leads to another friendly piece
     Input:  piece (int) Index of the piece to check
             otherPieces (list of int) Indecies of the other player pieces
             enemyPieces (list of lists of int) List of lists of the enemy pieces to check for (use enemyPieces from game.get_observation)
             diceRoll (int) What the dice rolled
     Output (bool) True if the piece can move to safely to the next tile, False otherwise
     """
-
-    # What about the end star? Also, i dont account for jumps if the tile is a star
-
-    # Cannot move to a safe location if the piece is at home. This action is instead called move out
-    if isAtHome(piece):
-        return False
-
     nextTile = piece + diceRoll
-    if isOnNormalGlobe(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 0:
+
+    if piece == 0 and not canMoveOut(piece,diceRoll):
+        return False
+    elif canMoveOut(piece,diceRoll):
         return True
-    elif nextTile in otherPieces:
+    elif isOnNormalGlobe(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 0:
+        return True
+    elif nextTile in otherPieces and nextStar(piece) != nextTile:
         return True
     elif isInApproachToGoal(nextTile):
         return True
-    elif isSafeOnEnemyHomeGlobe(nextTile):
+    elif isSafeOnEnemyHomeGlobe(nextTile,enemyPieces):
         return True
     elif nextStar(piece) == nextTile and nextStar(nextTile) in otherPieces:
         return True
     return False
-    
+
+def canSuicide(piece,diceRoll,enemyPieces):
+    """
+    Checks if a piece can suicide, which can happen in one of z ways
+    1. Move to a globe with an enemy piece on it, unless it is the home globe
+    2. Move to a space with two or more enemies on it, that is not a star
+    3. Move to a star, where either the first or second star contains two or more enemy pieces
+    Input:  piece (int) Index of the piece to check
+            diceRoll (int) What the dice rolled
+            enemyPieces (list of lists of int) List of lists of the enemy pieces to check for (use enemyPieces from game.get_observation)
+    Output (bool) True if the piece can suicide, False otherwise
+    """
+    nextTile = piece + diceRoll
+    # If the piece is in goal or in the goal zone, it cannot suicide
+    if not isInGoal(piece) and not isInApproachToGoal(piece):
+        # Check if the piece can move to a globe with an enemy piece on it, and that the globe isn't the home globe
+        if nextTile != 1 and (isOnNormalGlobe(nextTile) or isOnEnemyHomeGlobe(nextTile)) and numberOfEnemiesAtTile(nextTile,enemyPieces) > 0:
+            return True
+        # Check if there are two or more enemies on the next tile, and that it is not a star
+        if nextStar(piece) != nextTile and numberOfEnemiesAtTile(nextTile,enemyPieces) > 1:
+            return True
+        # Check if the next tile is a star, and that either the first or the second star contains more than two enemies
+        if nextStar(piece) == nextTile and (numberOfEnemiesAtTile(nextTile,enemyPieces) > 1 or numberOfEnemiesAtTile(nextStar(nextTile),enemyPieces) > 1):
+            return True
+    return False

@@ -2,7 +2,7 @@ from shutil import move
 import ludopy
 import numpy as np
 import cv2
-#import AI
+import AI
 from ludoHelperFunctions import *
 
 
@@ -45,8 +45,8 @@ while not winnerFound:
     # Observe the game state. A get_obersvation call must be answered be a answer_observation call before it can be called again
     # diceRoll (int): Dice roll for the current player
     # movePieces (list of up to four ints): Index of the pieces that can be moved. E.g piece 0, 1, 2 or 3 (They are zero-indexed)
-    # playerPieces (list of four ints): Position of the current players pieces on the board. Corresponds to the numeration of the game board
-    # enemyPieces: (list of four ints): Position of the enemy pieces on the board. Corresponds to the numeration of the game board
+    # playerPieces (list of four ints): Indecies of the current players pieces on the board. Corresponds to the numeration of the game board
+    # enemyPieces: (list of four ints): Indecies of the enemy pieces on the board. The indecies are given in teh players respective frames, NOT the current player
     # playerWinner (bool): True, if the current player is the winner
     # winnerFound (bool): True, if a winner has been found
     # curPlayer (int): Index of the current player
@@ -82,10 +82,12 @@ while not winnerFound:
                 print(f"You can only move piece {movePieces+1} located at board index {playerPieces[movePieces[0]]}, so moving that")
                 pieceToMoveIndex = movePieces[0]
             else: """
-            print("-----Enemy pieces:-----\n", enemyPieces)
-            for index,piece in enumerate(playerPieces):
-                otherPieces = np.delete(playerPieces,index)
-                print("Piece", index+1, "Danger: ", isInDanger(piece,otherPieces,enemyPieces))
+            #print("-----Enemy pieces:-----\n", enemyPieces)
+            #for index,piece in enumerate(playerPieces):
+            #    otherPieces = np.delete(playerPieces,index)
+            #    print("Piece", index+1, "Danger: ", isInDanger(piece,otherPieces,enemyPieces))
+            #actions = AI.getAvaliableActions(playerPieces,diceRoll,enemyPieces)
+            #print(actions)
             print("Choose one of the following pieces to move, by pressing the corresponding number on your keyboard")
             for pieceNumber in movePieces:
                 print(f"Piece {pieceNumber+1} located at index {playerPieces[pieceNumber]}")
