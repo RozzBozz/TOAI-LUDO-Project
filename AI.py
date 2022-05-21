@@ -24,19 +24,35 @@ ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE]
 
 class AI:
 
-    def __init__(self,filename,alpha=0.5,gamma=0.9, epsilon=0.1):
+    def reset(self, resetQTable = False):
+        # If resetQTable is True, initialize a new Q-table        
+        self.prevState = []
+        self.curState = [HOME,HOME,HOME,HOME]
+
+    def __init__(self,filename="",alpha=0.5,gamma=0.9, epsilon=0.1):
+        # If filename is given, attempt to load it
+        # If it exists, use that
+        # Else, initialize empty Q-table
+        # If no filename is given, initialize an empty Q-table
         # Load Q-table file from path
         # If it doesn't exist, allocate a new one
         #self.QTable =
         # Define the initial state
-        self.prevState = []
-        self.curState = [HOME,HOME,HOME,HOME]
+        self.resetState()
         self.numberOfGamesPlayed = 0
         self.numberOfWins = 0
-        self.winrate = 0
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+
+    def addWin(self):
+        self.numberOfWins = self.numberOfWins + 1
+
+    def addGamePlayed(self):
+        self.numberOfGamesPlayed = self.numberOfGamesPlayed + 1
+
+    def getWinRate(self):
+        return self.numberOfWins / self.numberOfGamesPlayed
 
     def getState(self):
         return self.curState
@@ -76,16 +92,33 @@ class AI:
 
     def selectAction(self,diceRoll,pieces,enemyPieces):
         # Select an action based on the epsilon greedy equation
-
-        # Maybe wrap all of this in a nice class in the helper functions file?
-        # This way it can be used when creating semi-random players
-        # Save it for later
-
+        # Returns the index of the selected piece
+        # Get avaliable actions
         actions = getAvaliableActions(pieces,diceRoll,enemyPieces)
         
-        # Select a random value between 0 and 100, if smaller than epsilon, choose a random action
-        # Else, choose action with largest Q value
-        # Return the action
+        # Check if there are any valid actions, otherwise return -1
+        if sum(actionList[0]) + sum(actionList[1]) + sum(actionList[2]) + sum(actionList[3]) == 0:
+            return -1
+
+        randomActionChance = np.random.randint(0, 100) # (0 to 99)
+        if randomActionChance < self.epsilon:
+            # Perform random action
+            print("Choosing random action!")
+            pieceNumber = np.random.randInt(0,4) # (0 to 3)
+            return pieceNumber
+        else:
+            print("Choosing max action!")
+            # In the Q-table, the row corresponds to the state, and the 
+            bestPieceNumber, bestQVal = 0
+            for pieceIndex,actionList in enumerate(actions):
+                for action in actionList:
+                    # Get Q-value of current action/state. Action index in Q-table must be action*pieceIndex
+                    # State index is the index of the current state, must be self.curState[0] + self.curState[1] * 5 + seld.curState[2] * 25 + self.curState[3] * 125
+                    curQVal = 0 # Input actual Q-value
+                    if curQVal > bestQVal:
+                        bestQVal = curQVal
+                        bestPieceNumber = pieceIndex
+            return bestPieceNumber
 
     def calculateReward(self,state,round):
         # Calculate and return reward
@@ -96,6 +129,10 @@ class AI:
 
     def saveQTable(self,filename):
         # Save to class Q-table to a file
+        pass
+
+    def saveWinRate(self,filename):
+        #TODO Implement appending win-rate to file
         pass
 
 def getAvaliableActions(pieces, diceRoll, enemyPieces):
