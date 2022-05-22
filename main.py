@@ -18,27 +18,29 @@ from ludoHelperFunctions import *
 
 # ---------- CONTROLS ----------
 # Which player number is the AI/human? (If number 4 is chosen, it matches with the game video produced, if that is enabled)
-playerNumber = 1 #
+playerNumber = 1
 # How many games should be played?
-numberOfGames = 1
+numberOfGames = 10000
 # How many opponents?
 numberOfOpponents = 3
 # Is the AI playing?
-isAI = False
+isAI = True
 # If the human is playing, should moves be performed if they are the only choice?
 autoMove = True
 # Should the game history be saved? (Not recommended if numberOfGames > 1)
 saveGameHistory = False
-# Should the Q-table of the AI be reset after a test? (NOT IMPLEMENTED)
-resetAfterTest = False
-# Are the enemies random players or semi smart players? (NOT IMPLEMENTED)
-randomEnemies = True
+# Should the Q-table of the AI be reset after a test?
+resetQTableAfterTest = False
+# Are the enemies random players or semi smart players?
+randomEnemies = True # (NOT IMPLEMENTED)
+
+# I imagine test for-loop is gonna start here
 
 # Initialization of AI/
 if isAI == True:
     pathToQTable = ""
-    winRatePath = ""
-    ludoAI = AI(pathToQTable)
+    winRateHistoryPath = ""
+    ludoAI = AI()
 else:
     # To keep track of how many wins the current player has
     winCounter = 0
@@ -72,8 +74,10 @@ for gameNumber in range(1,numberOfGames+1):
     # Stores the round number of the current game
     round = 0
     # If the round is zero, and the player is an AI, reset the state of the AI
-    if round == 0 and isAI == True:
-        AI.reset(resetAfterTest)
+    if isAI == True:
+        ludoAI.reset(resetQTable=resetQTableAfterTest)
+        # Specifies, that a state update, reward calculation and Q-table update shouldn't be done in the first round
+        doSRupdate = False
 
     print("-------------------- START OF GAME", gameNumber, "OF", numberOfGames,"--------------------")
 
@@ -92,7 +96,7 @@ for gameNumber in range(1,numberOfGames+1):
         allPieces = np.append(enemyPieces, [playerPieces], axis=0)
 
         # The first player (index 0) starts a round
-        # If it is the first round, account for the fact, that the dice may be cast up to three times or until a six is rolled, whichever comes first
+        # If it is the first round, account for the fact, that a player may cast the dice multiple times in a row during start, or if he/she hits a six
         if curPlayer == 0 and curPlayer != prevPlayer:
             round = round + 1
             # Only print round number if the player is human
@@ -108,12 +112,37 @@ for gameNumber in range(1,numberOfGames+1):
             # Print the rolled die, if the player is human
             if isAI == False:
                 print(f"Dice rolled: {diceRoll}")
-            # Checks if there are pieces that can be moved
-            if len(movePieces) >= 1:
-                if isAI == True:
-                    # TODO: Implement AI functionality (SARSA)
-                    pass
-                else:        
+            
+            if isAI == True:
+                    #print(f"---Dice rolled: {diceRoll}") #[For debugging AI]
+                    #print("Pieces are located at", playerPieces) #[For debugging AI]
+                    # Skip the SR-update before the first action
+                    if doSRupdate:
+                        # Start by updating the state of the AI
+                        ludoAI.updateState(pieces=playerPieces,enemyPieces=enemyPieces)
+                        #wait = input() #[For debugging AI]
+                        # Estimate the reward for being in this state
+                        ludoAI.calculateReward(round=round,pieces=playerPieces)
+                        #wait = input() #[For debugging AI]
+                        # Update the Q-value of the previous state
+                        ludoAI.updateQValue()
+                        #wait = input() #[For debugging AI]
+                    doSRupdate = True
+                    # Select an action
+                    ludoAI.selectAction(diceRoll=diceRoll, pieces=playerPieces, enemyPieces=enemyPieces)
+                    pieceToMoveIndex = ludoAI.getPieceIndexMove()
+                    #print("AI chose to move piece with index:", pieceToMoveIndex) #[For debugging AI]
+                    #img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round) #[For debugging AI]
+                    #img = cv2.resize(img, (1088,900)) #[For debugging AI]
+                    #cv2.imshow("Current state of the board", img) #[For debugging AI]
+                    #key = cv2.waitKey(0) #[For debugging AI]
+                    #cv2.destroyWindow("Current state of the board") #[For debugging AI]
+                    #wait = input() # Wait in order to debug #[For debugging AI]
+            
+            # Human player
+            else:
+                # Checks if there are pieces that can be moved
+                if len(movePieces) >= 1:
                     # If all pieces are at either home or end, move one out
                     if autoMove == True:
                         canMove = False
@@ -160,8 +189,8 @@ for gameNumber in range(1,numberOfGames+1):
                                         break
                             else:
                                 print(f"Read key value {key}, expected on of the following possibilites: {moveKeys}. Try again")
-            else:
-                pieceToMoveIndex = -1   
+                else:
+                    pieceToMoveIndex = -1   
         else:
             if len(movePieces):
                 if randomEnemies:
@@ -187,10 +216,12 @@ for gameNumber in range(1,numberOfGames+1):
             print("You lost, better luck next time!")
         print("You have currently won", winCounter, "out of", numberOfGames, "games!")
     else:
-        AI.addGamePlayed()
+        ludoAI.addGamePlayed()
         if winningPlayer == playerNumber-1:
-            AI.addWin()
-        print("Current AI win rate: ", AI.getWinRate())
+            ludoAI.addWin()
+        print("Number of games played:", ludoAI.getNumberOfGamesPlayed())
+        print("Number of games won:", ludoAI.getNumberOfGamesWon())
+        print("Current AI win rate: ", ludoAI.getCurWinRate() * 100, "%")
     
     if saveGameHistory == True:
         print("Saving history to numpy file")
@@ -199,5 +230,12 @@ for gameNumber in range(1,numberOfGames+1):
         game.save_hist_video(f"game_video.avi")
 
 if isAI == True:
-    AI.saveQTable(pathToQTable)
-    AI.saveWinRate(winRatePath)
+    if pathToQTable == "":
+        ludoAI.saveQTable()
+    else:  
+        ludoAI.saveQTable(pathToQTable)
+    if winRateHistoryPath == "":
+        ludoAI.saveWinRateHistory()
+    else:  
+        ludoAI.saveWinRateHistory(winRateHistoryPath)
+    

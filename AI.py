@@ -1,6 +1,8 @@
 from lib2to3.refactor import MultiprocessingUnsupported
+from operator import index
 from ludopy.player import get_enemy_at_pos
 from ludoHelperFunctions import *
+from os.path import exists
 
 # States
 HOME = 0
@@ -25,37 +27,45 @@ ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE]
 class AI:
 
     def reset(self, resetQTable = False):
-        # If resetQTable is True, initialize a new Q-table        
+        if resetQTable:
+            self.QTable = np.zeros((pow(len(STATES),4),len(ACTIONS)*4+1))       
         self.prevState = []
+        self.action = []
         self.curState = [HOME,HOME,HOME,HOME]
+        self.reward = 0
 
-    def __init__(self,filename="",alpha=0.5,gamma=0.9, epsilon=0.1):
-        # If filename is given, attempt to load it
-        # If it exists, use that
-        # Else, initialize empty Q-table
-        # If no filename is given, initialize an empty Q-table
-        # Load Q-table file from path
-        # If it doesn't exist, allocate a new one
-        #self.QTable =
+    def __init__(self,QTableFileName="QTable.npy",winRateHistoryFileName="winRate.txt",alpha=0.5,gamma=0.9, epsilon=0.1):
+        # Attempt to load Q-table
+        if exists(QTableFileName):
+            self.QTable = np.load(QTableFileName)
+        else:
+            self.QTable = np.zeros((pow(len(STATES),4),len(ACTIONS)*4+1))
+        if exists(winRateHistoryFileName):
+            self.winRateHistory = np.loadtxt(winRateHistoryFileName)
+        else:
+            self.winRateHistory = []
         # Define the initial state
-        self.resetState()
-        self.numberOfGamesPlayed = 0
-        self.numberOfWins = 0
+        self.reset()
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+        self.numberOfGamesPlayed = 0
+        self.numberOfWins = 0
 
     def addWin(self):
-        self.numberOfWins = self.numberOfWins + 1
+        self.numberOfWins += 1
 
     def addGamePlayed(self):
-        self.numberOfGamesPlayed = self.numberOfGamesPlayed + 1
+        self.numberOfGamesPlayed += 1
 
-    def getWinRate(self):
+    def getCurWinRate(self):
         return self.numberOfWins / self.numberOfGamesPlayed
 
-    def getState(self):
+    def getCurState(self):
         return self.curState
+
+    def getPrevState(self):
+        return self.prevState
 
     def updateState(self,pieces,enemyPieces):
         # Update state based on current board
@@ -87,53 +97,166 @@ class AI:
             else:
                 newStates.append(SAFE)
         # Update the states
+        #print("Going from state", self.curState, "to state", newStates)
         self.prevState = self.curState
         self.curState = newStates
 
+    def getQValueIndex(self,state,action):
+        # Row index is the index of the current state, must be self.curState[0] + self.curState[1] * 5 + self.curState[2] * 25 + self.curState[3] * 125
+        rowIndex = state[0] + state[1] * 5 + state[2] * 25 + state[3] * 125
+        # Column index in Q-table must be pieceIndex + action + 5 * pieceIndex
+        columnIndex = action[0] + action[1] + 5 * action[0]
+        return [rowIndex,columnIndex]
+    
+    def getQValue(self,state,action):
+        index = self.getQValueIndex(state,action)
+        return self.QTable[index[0]][index[1]]
+
+    def setQValue(self,value,state,action):
+        #print("Setting value", value)
+        #print("For state", state)
+        #print("And action", action)
+        index = self.getQValueIndex(state,action)
+        #print("Got index", index)
+        self.QTable[index[0],index[1]] = value
+
     def selectAction(self,diceRoll,pieces,enemyPieces):
-        # Select an action based on the epsilon greedy equation
-        # Returns the index of the selected piece
-        # Get avaliable actions
+        # Select an action based on the epsilon greedy action selection
+        # The action set is a list with two elements, the first being the index of the piece moving, and the second the action chosen
+
         actions = getAvaliableActions(pieces,diceRoll,enemyPieces)
-        
-        # Check if there are any valid actions, otherwise return -1
-        if sum(actionList[0]) + sum(actionList[1]) + sum(actionList[2]) + sum(actionList[3]) == 0:
-            return -1
+        #print("Got actions:", actions)
 
-        randomActionChance = np.random.randint(0, 100) # (0 to 99)
-        if randomActionChance < self.epsilon:
-            # Perform random action
-            print("Choosing random action!")
-            pieceNumber = np.random.randInt(0,4) # (0 to 3)
-            return pieceNumber
+        # Check if there are any valid actions, otherwise set to [-1 24]
+        lenPieceActions = []
+        for actionList in actions:
+            lenPieceActions.append(len(actionList))
+        if sum(lenPieceActions) == 0:
+            self.action = [-1, 24]
         else:
-            print("Choosing max action!")
-            # In the Q-table, the row corresponds to the state, and the 
-            bestPieceNumber, bestQVal = 0
-            for pieceIndex,actionList in enumerate(actions):
-                for action in actionList:
-                    # Get Q-value of current action/state. Action index in Q-table must be action*pieceIndex
-                    # State index is the index of the current state, must be self.curState[0] + self.curState[1] * 5 + seld.curState[2] * 25 + self.curState[3] * 125
-                    curQVal = 0 # Input actual Q-value
-                    if curQVal > bestQVal:
-                        bestQVal = curQVal
-                        bestPieceNumber = pieceIndex
-            return bestPieceNumber
+            # Remove all pieces, who don't have any actions
+            avaliablePieces = []
+            for index, _ in enumerate(lenPieceActions):
+                if lenPieceActions[index] != 0:
+                    avaliablePieces.append(index)
 
-    def calculateReward(self,state,round):
-        # Calculate and return reward
-        pass
+            randomActionChance = np.random.randint(0, 100) # (0 to 99)
+            #print("Random Action selection, rolled", randomActionChance)
+            if randomActionChance < self.epsilon:
+                # Select one of the avaliable pieces at random
+                #print("AI chose a random action!")
+                #print("Avaliable Pieces", avaliablePieces)
+                if len(avaliablePieces) == 1:
+                    pieceIndex = avaliablePieces[0]
+                    #print("Only one valid piece! Chose number", pieceIndex)
+                    if len(actions[pieceIndex]) == 1:
+                        self.action = [pieceIndex,actions[pieceIndex][0]]
+                        #print("And only one valid action! Chose action", actions[pieceIndex][0])
+                    else:
+                        actionIndex = np.random.randint(0,len(actions[pieceIndex]))
+                        self.action = [pieceIndex,actions[pieceIndex][actionIndex]]
+                        #print("But more than one action! Chose action", actions[pieceIndex][actionIndex])
+                else:
+                    pieceIndex = np.random.randint(0,len(avaliablePieces))
+                    #print("More than one valid piece! Chose number", avaliablePieces[pieceIndex])
+                    if len(actions[avaliablePieces[pieceIndex]]) == 1:
+                        self.action = [avaliablePieces[pieceIndex],actions[avaliablePieces[pieceIndex]][0]]
+                        #print("But only one valid action! Chose action", actions[avaliablePieces[pieceIndex]][0])
+                    else:
+                        actionIndex = np.random.randint(0,len(actions[avaliablePieces[pieceIndex]]))
+                        self.action = [avaliablePieces[pieceIndex],actions[avaliablePieces[pieceIndex]][actionIndex]]
+                        #print("And more than one action! Chose action", actions[pieceIndex][actionIndex])
+            else:
+                #print("AI is choosing max action!")
+                #print("From pieces", avaliablePieces)
+                bestPieceNumber, bestQVal, bestAction = 0, 0, 0
+                firstAction = True
+                for pieceIndex in avaliablePieces:
+                    for action in actions[pieceIndex]:
+                        curQVal = self.getQValue(self.curState,[pieceIndex,action])
+                        # If this is the first action that's being checked, set that as the benchmark to beat
+                        if firstAction:
+                            bestQVal = curQVal
+                            bestPieceNumber = pieceIndex
+                            bestAction = action
+                            firstAction = False
+                            continue
+                        # If this Q-value is better than the current, update it                       
+                        if curQVal > bestQVal:
+                            bestQVal = curQVal
+                            bestPieceNumber = pieceIndex
+                            bestAction = action
+                #print("The max action chosen was", [bestPieceNumber,bestAction])
+                #print("With Q-value", bestQVal)
+                self.action = [bestPieceNumber,bestAction]
 
-    def updateQTable(self,state,action,reward):
-        pass
+    def getPieceIndexMove(self):
+        # Get the index of the piece that was chosen by the AI to move during the last call to select action
+        return self.action[0]
 
-    def saveQTable(self,filename):
-        # Save to class Q-table to a file
-        pass
+    def calculateReward(self,round,pieces):
+        # Calculate and set reward
+        reward = 0
+        for state in self.curState:
+            if state == HOME:
+                reward -= 0.5
+            elif state == GOAL:
+                reward += 1
+            elif state == APPROACHGOAL:
+                reward += 1
+            elif state == DANGER:
+                reward -= 0.5
+            elif state == SAFE:
+                reward += 0.5
+        
+        # Increase/decrease reward based on distance to goal
+        for piece in pieces:
+            reward -= 0.5 + piece / 39.3 # Minus 0.5 if at home, plus 1 if at goal, thereby same as static rewards
+        
+        # Decrease reward base on round timer
+        reward -= round * 0.01
+        #print("Calculated reward", reward)
+        self.reward = reward
 
-    def saveWinRate(self,filename):
-        #TODO Implement appending win-rate to file
-        pass
+    def updateQValue(self):
+        if self.action[1] == 24: # No valid action, AI must stay
+            oldQVal = self.getQValue(self.prevState,[0,24])
+        else:
+            oldQVal = self.getQValue(self.prevState,self.action)
+        # Find the best action for the new state
+        maxQval = 0
+        for i in range (0,4): # Always four pieces
+            for j in range(0,len(ACTIONS)): # Always len(ACTIONS)+1 amount of actions, since the last action is stay, if no other actions are avaliable
+                curQVal = self.getQValue(self.curState,[i,j])
+                if curQVal > maxQval:
+                    maxQval = curQVal
+        # Also check the stay Q-value
+        stayQVal = self.getQValue(self.curState,[0,24])
+        if stayQVal > curQVal:
+            maxQval = stayQVal
+        #print("Old Q value",oldQVal)
+        #print("abs of that",abs(oldQVal))
+        #print("Max Q value", maxQval)
+        #print("self reward", self.reward)
+        newVal = self.alpha * (self.reward + self.gamma * maxQval - abs(oldQVal))
+        #print("New Q-value", newVal)
+        # If the current action was to stay, make sure to call the update correctly
+        if self.action[1] == 24:
+            self.setQValue(newVal, self.prevState, [0,24])  
+        else:
+            self.setQValue(newVal, self.prevState, self.action)        
+
+    def saveQTable(self,filename="QTable.npy"):
+        np.save(filename,self.QTable)
+
+    def saveWinRateHistory(self,filename="winRate.txt"):
+        np.savetxt(filename,np.append(self.winRateHistory,self.getCurWinRate()))
+
+    def getNumberOfGamesPlayed(self):
+        return self.numberOfGamesPlayed
+
+    def getNumberOfGamesWon(self):
+        return self.numberOfWins
 
 def getAvaliableActions(pieces, diceRoll, enemyPieces):
     """
