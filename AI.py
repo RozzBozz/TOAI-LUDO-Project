@@ -3,6 +3,7 @@ from operator import index
 from ludopy.player import get_enemy_at_pos
 from ludoHelperFunctions import *
 from os.path import exists
+import math
 
 # States
 HOME = 0
@@ -26,24 +27,27 @@ ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE]
 
 class AI:
 
-    def reset(self, resetQTable = False):
-        if resetQTable:
-            self.QTable = np.zeros((pow(len(STATES),4),len(ACTIONS)*4+1))       
+    def reset(self,):
         self.prevState = []
         self.action = []
         self.curState = [HOME,HOME,HOME,HOME]
         self.reward = 0
 
-    def __init__(self,QTableFileName="QTable.npy",winRateHistoryFileName="winRate.txt",alpha=0.5,gamma=0.9, epsilon=0.1):
+    def __init__(self,QTableFileName="QTable.npy",dataFileName="dataFile.txt",winRatesFileName="winRates.txt",alpha=0.5,gamma=0.9, epsilon=0.1, newQTable = False, newDataFile = False, loadOldWinrates = False):
         # Attempt to load Q-table
-        if exists(QTableFileName):
-            self.QTable = np.load(QTableFileName)
-        else:
+        if newQTable or not exists(QTableFileName):
             self.QTable = np.zeros((pow(len(STATES),4),len(ACTIONS)*4+1))
-        if exists(winRateHistoryFileName):
-            self.winRateHistory = np.loadtxt(winRateHistoryFileName)
         else:
-            self.winRateHistory = []
+            self.QTable = np.load(QTableFileName)
+        if newDataFile or not exists(dataFileName):
+            self.data = []
+        else:
+            self.data = np.loadtxt(dataFileName)
+        self.winRates = []
+        if loadOldWinrates and exists(winRatesFileName):
+            self.oldWinRates = np.loadtxt(winRatesFileName)
+        else:
+            self.oldWinRates = []
         # Define the initial state
         self.reset()
         self.alpha = alpha
@@ -59,7 +63,7 @@ class AI:
         self.numberOfGamesPlayed += 1
 
     def getCurWinRate(self):
-        return self.numberOfWins / self.numberOfGamesPlayed
+        return self.numberOfWins / self.numberOfGamesPlayed * 100
 
     def getCurState(self):
         return self.curState
@@ -201,20 +205,22 @@ class AI:
             if state == HOME:
                 reward -= 0.5
             elif state == GOAL:
-                reward += 1
+                reward += 1 # 2
             elif state == APPROACHGOAL:
-                reward += 1
+                reward += 1 # 2
             elif state == DANGER:
                 reward -= 0.5
             elif state == SAFE:
-                reward += 0.5
+                reward += 0.5 # 1
         
-        # Increase/decrease reward based on distance to goal
+        # Decrease reward based on distance to goal zone
         for piece in pieces:
-            reward -= 0.5 + piece / 39.3 # Minus 0.5 if at home, plus 1 if at goal, thereby same as static rewards
+            #reward += piece / 39.3 - 0.5
+            if piece < 52:
+                reward += piece / 216 - 0.25 # max is 0.25, min is 0.01.
         
         # Decrease reward base on round timer
-        reward -= round * 0.01
+        #reward -= round * 0.005
         #print("Calculated reward", reward)
         self.reward = reward
 
@@ -238,25 +244,78 @@ class AI:
         #print("abs of that",abs(oldQVal))
         #print("Max Q value", maxQval)
         #print("self reward", self.reward)
-        newVal = self.alpha * (self.reward + self.gamma * maxQval - abs(oldQVal))
+        deltaQVal = self.alpha * (self.reward + self.gamma * maxQval - oldQVal)
         #print("New Q-value", newVal)
         # If the current action was to stay, make sure to call the update correctly
         if self.action[1] == 24:
-            self.setQValue(newVal, self.prevState, [0,24])  
+            self.setQValue(oldQVal + deltaQVal, self.prevState, [0,24])  
         else:
-            self.setQValue(newVal, self.prevState, self.action)        
+            self.setQValue(oldQVal + deltaQVal, self.prevState, self.action)        
 
     def saveQTable(self,filename="QTable.npy"):
         np.save(filename,self.QTable)
 
-    def saveWinRateHistory(self,filename="winRate.txt"):
-        np.savetxt(filename,np.append(self.winRateHistory,self.getCurWinRate()))
+    def saveDataFile(self,filename="dataFile.txt"):
+        # Win rate
+        winRate = self.getCurWinRate()
+        # Percent of Q table empty
+        percentZeroQTable = np.count_nonzero(self.QTable==0)/(self.QTable.shape[0]*self.QTable.shape[1])*100
+        # Max Q value
+        maxQ = self.QTable.max()
+        # Min Q value
+        minQ = self.QTable.min()
+        # State for the max Q value
+        locationMaxQ = [np.where(self.QTable == np.amax(self.QTable))[0], np.where(self.QTable == np.amax(self.QTable))[1]]
+        qMax4Index = int(math.floor(locationMaxQ[0][0] / 125))
+        remainder = locationMaxQ[0][0] % 125
+        qMax3Index = int(math.floor(remainder / 25))
+        remainder = remainder % 25
+        qMax2Index = int(math.ceil(remainder / 5))
+        remainder = remainder % 5
+        qMax1Index = remainder
+        qMaxState = [qMax1Index, qMax2Index, qMax3Index, qMax4Index]
+        # Piece and action for the max value
+        maxPiece = int(math.floor(locationMaxQ[1][0] / 6))
+        maxAction = locationMaxQ[1][0] % 6
+        # State for the min Q value
+        locationMinQ = [np.where(self.QTable == np.amin(self.QTable))[0], np.where(self.QTable == np.amin(self.QTable))[1]]
+        qMin4Index = int(math.floor(locationMinQ[0][0] / 125))
+        remainder = locationMinQ[0][0] % 125
+        qMin3Index = int(math.floor(remainder / 25))
+        remainder = remainder % 25
+        qMin2Index = int(math.floor(remainder / 5))
+        remainder = remainder % 5
+        qMin1Index = remainder
+        # Piece and action for the min value
+        minPiece = int(math.floor(locationMinQ[1][0] / 6))
+        minAction = locationMinQ[1][0] % 6
+        qMinState = [qMin1Index, qMin2Index, qMin3Index, qMin4Index]
+
+        # Create list with data
+        newData = np.array([winRate, percentZeroQTable, maxQ, qMaxState[0], qMaxState[1], qMaxState[2], qMaxState[3], maxPiece, maxAction, minQ, qMinState[0], qMinState[1], qMinState[2], qMinState[3], minPiece, minAction])
+        # Save it
+        # If list is not empty, Concat old and new array, with new array being the last row
+        if len(self.data) > 0:
+            newData = np.stack((self.data, newData))
+        np.savetxt(filename, newData, fmt='%1.3f',header="Winrate [%], Empty Q Table [%], Max Q, State 1, State 2, State 3, State 4, Piece, Action, Min Q, State 1, State 2, State 3, State 4, Piece, Action")
 
     def getNumberOfGamesPlayed(self):
         return self.numberOfGamesPlayed
 
     def getNumberOfGamesWon(self):
         return self.numberOfWins
+    
+    def updateWinRates(self):
+        self.winRates.append(self.getCurWinRate())
+
+    def saveWinRates(self, filename="winRates.txt"):
+        # Make the winrates into a numpy array
+        winRates = np.array(self.winRates)
+        # If old win rates have been loaded, stack them
+        if len(self.oldWinRates) > 0:
+            winRates = np.stack((self.oldWinRates, self.winRates))
+        np.savetxt(filename, winRates, fmt='%1.3f',header="Winrates [%]")
+
 
 def getAvaliableActions(pieces, diceRoll, enemyPieces):
     """

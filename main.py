@@ -5,42 +5,43 @@ import cv2
 from AI import *
 from ludoHelperFunctions import *
 
-## AI-loop should look something like
-# 0. If the game started (again), set the initial state
-# 1. Choose actions and perform
-# 2. Let game progress
-# 3. Update the state
-# 4. Calculate the reward based on this new state
-# 5. Update the value of the old state
-# 6. Repeat 1-5 until game is finished
-
 # Idea: Possible multiplayer support, but out of scope of the project
 
 # ---------- CONTROLS ----------
 # Which player number is the AI/human? (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played?
-numberOfGames = 10000
+numberOfGames = 101
 # How many opponents?
 numberOfOpponents = 3
 # Is the AI playing?
 isAI = True
+# Should the AI train, or just exploit the current knowledge (Q-table)?
+shouldLearn = False
+# If the AI is training, should it start from scratch?
+shouldStartOver = False
+# Values for the hyper parameters of the AI (epsilon, alpha, gamma)
+parameters = [0.1, 0.5, 0.9]
 # If the human is playing, should moves be performed if they are the only choice?
 autoMove = True
 # Should the game history be saved? (Not recommended if numberOfGames > 1)
 saveGameHistory = False
-# Should the Q-table of the AI be reset after a test?
-resetQTableAfterTest = False
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 
-# I imagine test for-loop is gonna start here
-
 # Initialization of AI/
 if isAI == True:
-    pathToQTable = ""
-    winRateHistoryPath = ""
-    ludoAI = AI()
+    QTableFileName = "QTables/epsilon{}alpha{}gamma{}.npy".format(parameters[0],parameters[1],parameters[2])
+    dataFileName = "dataFiles/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
+    winRatesFileName = "winRates/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
+    if shouldStartOver:
+        print("---------- AI currently LEARNING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
+        ludoAI = AI(epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], newQTable=True, newDataFile=True)
+    else:
+        if not shouldLearn:
+            parameters[0] = 0
+        print("---------- AI currently TESTING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
+        ludoAI = AI(QTableFileName=QTableFileName, dataFileName=dataFileName, winRatesFileName=winRatesFileName, epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], loadOldWinrates= True)
 else:
     # To keep track of how many wins the current player has
     winCounter = 0
@@ -74,12 +75,17 @@ for gameNumber in range(1,numberOfGames+1):
     # Stores the round number of the current game
     round = 0
     # If the round is zero, and the player is an AI, reset the state of the AI
+    
     if isAI == True:
-        ludoAI.reset(resetQTable=resetQTableAfterTest)
+        ludoAI.reset()
         # Specifies, that a state update, reward calculation and Q-table update shouldn't be done in the first round
         doSRupdate = False
 
-    print("-------------------- START OF GAME", gameNumber, "OF", numberOfGames,"--------------------")
+    # Print every 100th game
+    if isAI and gameNumber % 100 == 0:
+        print("---------- Currently playing game number", gameNumber, "of", numberOfGames, "----------")
+    elif not isAI:
+        print("-------------------- START OF GAME", gameNumber, "OF", numberOfGames,"--------------------")
 
     while not winnerFound:
 
@@ -114,31 +120,19 @@ for gameNumber in range(1,numberOfGames+1):
                 print(f"Dice rolled: {diceRoll}")
             
             if isAI == True:
-                    #print(f"---Dice rolled: {diceRoll}") #[For debugging AI]
-                    #print("Pieces are located at", playerPieces) #[For debugging AI]
                     # Skip the SR-update before the first action
                     if doSRupdate:
                         # Start by updating the state of the AI
                         ludoAI.updateState(pieces=playerPieces,enemyPieces=enemyPieces)
-                        #wait = input() #[For debugging AI]
-                        # Estimate the reward for being in this state
-                        ludoAI.calculateReward(round=round,pieces=playerPieces)
-                        #wait = input() #[For debugging AI]
-                        # Update the Q-value of the previous state
-                        ludoAI.updateQValue()
-                        #wait = input() #[For debugging AI]
+                        if shouldLearn:
+                            # Estimate the reward for being in this state
+                            ludoAI.calculateReward(round=round,pieces=playerPieces)
+                            # Update the Q-value of the previous state
+                            ludoAI.updateQValue()
                     doSRupdate = True
                     # Select an action
                     ludoAI.selectAction(diceRoll=diceRoll, pieces=playerPieces, enemyPieces=enemyPieces)
-                    pieceToMoveIndex = ludoAI.getPieceIndexMove()
-                    #print("AI chose to move piece with index:", pieceToMoveIndex) #[For debugging AI]
-                    #img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round) #[For debugging AI]
-                    #img = cv2.resize(img, (1088,900)) #[For debugging AI]
-                    #cv2.imshow("Current state of the board", img) #[For debugging AI]
-                    #key = cv2.waitKey(0) #[For debugging AI]
-                    #cv2.destroyWindow("Current state of the board") #[For debugging AI]
-                    #wait = input() # Wait in order to debug #[For debugging AI]
-            
+                    pieceToMoveIndex = ludoAI.getPieceIndexMove()   
             # Human player
             else:
                 # Checks if there are pieces that can be moved
@@ -204,9 +198,9 @@ for gameNumber in range(1,numberOfGames+1):
 
         if winnerFound:
             winningPlayer = curPlayer
-
-    print("-------------------- GAME", gameNumber, "OF", numberOfGames, "FINISHED --------------------")
+    
     if isAI == False:
+        print("-------------------- GAME", gameNumber, "OF", numberOfGames, "FINISHED --------------------")
         # Print celebratory text
         print(f"Player {winningPlayer+1} won!")
         if winningPlayer == playerNumber-1:
@@ -219,9 +213,7 @@ for gameNumber in range(1,numberOfGames+1):
         ludoAI.addGamePlayed()
         if winningPlayer == playerNumber-1:
             ludoAI.addWin()
-        print("Number of games played:", ludoAI.getNumberOfGamesPlayed())
-        print("Number of games won:", ludoAI.getNumberOfGamesWon())
-        print("Current AI win rate: ", ludoAI.getCurWinRate() * 100, "%")
+        ludoAI.updateWinRates()
     
     if saveGameHistory == True:
         print("Saving history to numpy file")
@@ -230,12 +222,7 @@ for gameNumber in range(1,numberOfGames+1):
         game.save_hist_video(f"game_video.avi")
 
 if isAI == True:
-    if pathToQTable == "":
-        ludoAI.saveQTable()
-    else:  
-        ludoAI.saveQTable(pathToQTable)
-    if winRateHistoryPath == "":
-        ludoAI.saveWinRateHistory()
-    else:  
-        ludoAI.saveWinRateHistory(winRateHistoryPath)
+    ludoAI.saveQTable(QTableFileName)
+    ludoAI.saveDataFile(dataFileName)
+    ludoAI.saveWinRates(winRatesFileName)
     
