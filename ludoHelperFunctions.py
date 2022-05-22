@@ -129,22 +129,43 @@ def enemyInTileRange(tileIndex, enemyPieces, checkEndStar):
         # Going backwards, if i is zero or less, get the equivalent index because the table wraps around
         if i < 1:
             i = 52 + i
-        # Check if an enemy is at the current tile. If there is, get his player number (0-3) and the number of his piece standing there (0-3)
-        enemyNumber, enemyPieceNumber = get_enemy_at_pos(i,enemyPieces)
+        # Check if an enemy is at the current tile. If there is, get his player number (0-3) and the index(es) of his piece(s) standing there (0-3)
+        # Find out what the tile the piece is standing on is called in the enemies view
+        tileEnemyView = enemy_pos_at_pos(tileIndex)
+        enemyNumber, enemyPiecesNumbers = get_enemy_at_pos(i,enemyPieces)
         if enemyNumber != -1:
-            # Grab the index of his piece in range in his frame
-            enemyPieceIndex = enemyPieces[enemyNumber][enemyPieceNumber]
-            # Find out what the tile is called in that enemies view
-            tileEnemyView = enemy_pos_at_pos(tileIndex)
+            continueSearch = False
+            # Find out what the current tile is called in that enemies view
+            curTileEnemyView = enemy_pos_at_pos(i)
+            #print("Checking for piece at", tileIndex)
+            #print("Which in the enemy that is in range is called", tileEnemyView[enemyNumber])
+            #print("Enemy is at tile", i)
+            #print("Which in the enemy that is in range is called", curTileEnemyView[enemyNumber])
             # If the tile is the end star for the enemy player, and the flag is set, continue searching
-            if tileEnemyView[enemyNumber] == 51 and checkEndStar:
+            # This can be [1, 53], so make sure to iterate it
+            for enemyTile in curTileEnemyView[enemyNumber]:
+                if enemyTile == 51 and checkEndStar:
+                    continueSearch = True
+            if continueSearch:
                 continue
-            # If the enemy index is below 47, the tile is always in range, as the max tile is 52
-            if enemyPieceIndex < 47:
-                return True
-            # If the enemy index is 47 or above, the only way for the enemy to reach the tile is if it is above the enemy index
-            if enemyPieceIndex >= 47 and tileEnemyView[enemyNumber] > enemyPieceIndex:
-                return True
+            
+            #print("The number of the pieces the enemies has in range", enemyPiecesNumbers)
+            for enemyPieceNumber in enemyPiecesNumbers:
+                # Grab the index of his piece in range in his frame
+                # He can have multiple pieces!
+                enemyPieceIndex = enemyPieces[enemyNumber][enemyPieceNumber]
+                #print("Checking if enemy at index", enemyPieceIndex, "is in range")
+                # If the enemy index is below 47, the tile is always in range, as the max tile is 52
+                if enemyPieceIndex < 47:
+                    return True
+                # If the enemy index is 47 or above, the only way for the enemy to reach the current tile is if it is above the enemy index
+                # The til were checking for might be the enemy home tile, so account for that
+                if len(tileEnemyView[enemyNumber]) > 1:
+                    tileInEnemyView = 53
+                else:
+                    tileInEnemyView = tileEnemyView[enemyNumber]
+                if enemyPieceIndex >= 47 and tileInEnemyView > enemyPieceIndex:
+                    return True
     return False
 
 def isInDanger(piece,otherPieces,enemyPieces):
@@ -333,7 +354,7 @@ def canMoveSafe(piece,otherPieces,diceRoll,enemyPieces):
 
 def canSuicide(piece,diceRoll,enemyPieces):
     """
-    Checks if a piece can suicide, which can happen in one of z ways
+    Checks if a piece can suicide, which can happen in one of 3 ways
     1. Move to a globe with an enemy piece on it, unless it is the home globe
     2. Move to a space with two or more enemies on it, that is not a star
     3. Move to a star, where either the first or second star contains two or more enemy pieces
@@ -343,8 +364,8 @@ def canSuicide(piece,diceRoll,enemyPieces):
     Output (bool) True if the piece can suicide, False otherwise
     """
     nextTile = piece + diceRoll
-    # If the piece is in goal or in the goal zone, it cannot suicide
-    if not isInGoal(piece) and not isInApproachToGoal(piece):
+    # If the piece is home, in goal or in the goal zone, it cannot suicide
+    if not isAtHome(piece) and not isInGoal(piece) and not isInApproachToGoal(piece):
         # Check if the piece can move to a globe with an enemy piece on it, and that the globe isn't the home globe
         if nextTile != 1 and (isOnNormalGlobe(nextTile) or isOnEnemyHomeGlobe(nextTile)) and numberOfEnemiesAtTile(nextTile,enemyPieces) > 0:
             return True
