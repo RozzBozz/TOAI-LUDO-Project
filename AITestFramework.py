@@ -11,7 +11,7 @@ from ludoHelperFunctions import *
 # Which player number is the AI (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played for each test?
-numberOfGames = 101
+numberOfGames = 1000
 # How many opponents?
 numberOfOpponents = 3
 # Should the Q-table of the AI be reset after a test?
@@ -19,39 +19,33 @@ resetQTableAfterTest = True
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 # Should the AI start from scratch, or just exploit the current knowledge (Q-table)?
-shouldLearn = False
-# If the AI is training, should it start from scratch?
-shouldStartOver = False
+shouldLearn = True
+# Should the AI start from scratch? WARNING! DELETES CORRESPONDING FILES IN DIRECTORIES 'DATAFILES', 'QTABLES' AND 'WINRATES'
+startFromScratch = True
 
 # Values to be tested
-epsilons = [0.1, 0.5] # , 0.9
-alphas = [0.25] # , 0.5, 0.75
-gammas = [0.5] # , 0.7, 0.9
+epsilons = [0.1, 0.5, 0.9]
+alphas = [0.25, 0.5, 0.75]
+gammas = [0.5, 0.7, 0.9]
 
 for epsilon in epsilons:
     for alpha in alphas:
         for gamma in gammas:
-
             # Initialization of AI
             QTableFileName = "QTables/epsilon{}alpha{}gamma{}.npy".format(epsilon,alpha,gamma)
             dataFileName = "dataFiles/epsilon{}alpha{}gamma{}.txt".format(epsilon,alpha,gamma)
             winRatesFileName = "winRates/epsilon{}alpha{}gamma{}.txt".format(epsilon,alpha,gamma)
-            if shouldStartOver:
+            if shouldLearn:
+                ludoAI = AI(QTableFileName = QTableFileName, epsilon=epsilon, alpha=alpha, gamma=gamma, startFromScratch=startFromScratch)
                 print("---------- Currently LEARNING with values epsilon", epsilon, "alpha", alpha, "gamma", gamma, "----------")
-                ludoAI = AI(epsilon=epsilon, alpha=alpha, gamma=gamma, newQTable = True, newDataFile = True)
             else:
-                if not shouldLearn:
-                    epsilon = 0
-                print("---------- Currently TESTING with values epsilon", epsilon, "alpha", alpha, "gamma", gamma, "----------")
-                # Create the string for the Q-table and data-file the AI should use
-                ludoAI = AI(QTableFileName = QTableFileName, dataFileName = dataFileName, winRatesFileName=winRatesFileName, epsilon=epsilon, alpha=alpha, gamma=gamma, loadOldWinrates= True)
+                ludoAI = AI(QTableFileName = QTableFileName, epsilon=0, alpha=alpha, gamma=gamma, startFromScratch=startFromScratch)
+                print("---------- Currently TESTING AIs trained with values epsilon", epsilon, "alpha", alpha, "gamma", gamma, "----------")
 
             for gameNumber in range(1,numberOfGames+1):
-
                 # Print every 100th game
                 if gameNumber % 100 == 0:
                     print("---------- Currently playing game number", gameNumber, "of", numberOfGames, "----------")
-
                 # Initialize game
                 if numberOfOpponents == 3:
                     game = ludopy.Game()
@@ -71,10 +65,7 @@ for epsilon in epsilons:
                 # Specifies, that a state update, reward calculation and Q-table update shouldn't be done in the first round
                 doSRupdate = False
 
-                #print("-------------------- START OF GAME", gameNumber, "OF", numberOfGames,"--------------------")
-
                 while not winnerFound:
-
                     # Observe the game state. A get_obersvation call must be answered be a answer_observation call before it can be called again
                     # diceRoll (int): Dice roll for the current player
                     # movePieces (list of up to four ints): Index of the pieces that can be moved. E.g piece 0, 1, 2 or 3 (They are zero-indexed)

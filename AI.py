@@ -1,6 +1,4 @@
-from lib2to3.refactor import MultiprocessingUnsupported
-from operator import index
-from ludopy.player import get_enemy_at_pos
+from sre_parse import State
 from ludoHelperFunctions import *
 from os.path import exists
 import math
@@ -12,6 +10,80 @@ APPROACHGOAL = 2
 DANGER = 3
 SAFE = 4
 STATES = [HOME,GOAL,APPROACHGOAL,DANGER,SAFE]
+
+# State dictionary
+sDict = {
+    "[0, 0, 0, 0]": 0,
+    "[0, 0, 0, 1]": 1,
+    "[0, 0, 0, 2]": 2,
+    "[0, 0, 0, 3]": 3,
+    "[0, 0, 0, 4]": 4,
+    "[0, 0, 1, 1]": 5,
+    "[0, 0, 1, 2]": 6,
+    "[0, 0, 1, 3]": 7,
+    "[0, 0, 1, 4]": 8,
+    "[0, 0, 2, 2]": 9,
+    "[0, 0, 2, 3]": 10,
+    "[0, 0, 2, 4]": 11,
+    "[0, 0, 3, 3]": 12,
+    "[0, 0, 3, 4]": 13,
+    "[0, 0, 4, 4]": 14,
+    "[0, 1, 1, 1]": 15,
+    "[0, 1, 1, 2]": 16,
+    "[0, 1, 1, 3]": 17,
+    "[0, 1, 1, 4]": 18,
+    "[0, 1, 2, 2]": 19,
+    "[0, 1, 2, 3]": 20,
+    "[0, 1, 2, 4]": 21,
+    "[0, 1, 3, 3]": 22,
+    "[0, 1, 3, 4]": 23,
+    "[0, 1, 4, 4]": 24,
+    "[0, 2, 2, 2]": 25,
+    "[0, 2, 2, 3]": 26,
+    "[0, 2, 2, 4]": 27,
+    "[0, 2, 3, 3]": 28,
+    "[0, 2, 3, 4]": 29,
+    "[0, 2, 4, 4]": 30,
+    "[0, 3, 3, 3]": 31,
+    "[0, 3, 3, 4]": 32,
+    "[0, 3, 4, 4]": 33,
+    "[0, 4, 4, 4]": 34,
+    "[1, 1, 1, 1]": 35,
+    "[1, 1, 1, 2]": 36,
+    "[1, 1, 1, 3]": 37,
+    "[1, 1, 1, 4]": 38,
+    "[1, 1, 2, 2]": 39,
+    "[1, 1, 2, 3]": 40,
+    "[1, 1, 2, 4]": 41,
+    "[1, 1, 3, 3]": 42,
+    "[1, 1, 3, 4]": 43,
+    "[1, 1, 4, 4]": 44,
+    "[1, 2, 2, 2]": 45,
+    "[1, 2, 2, 3]": 46,
+    "[1, 2, 2, 4]": 47,
+    "[1, 2, 3, 3]": 48,
+    "[1, 2, 3, 4]": 49,
+    "[1, 2, 4, 4]": 50,
+    "[1, 3, 3, 3]": 51,
+    "[1, 3, 3, 4]": 52,
+    "[1, 3, 4, 4]": 53,
+    "[1, 4, 4, 4]": 54,
+    "[2, 2, 2, 2]": 55,
+    "[2, 2, 2, 3]": 56,
+    "[2, 2, 2, 4]": 57,
+    "[2, 2, 3, 3]": 58,
+    "[2, 2, 3, 4]": 59,
+    "[2, 2, 4, 4]": 60,
+    "[2, 3, 3, 3]": 61,
+    "[2, 3, 3, 4]": 62,
+    "[2, 3, 4, 4]": 63,
+    "[2, 4, 4, 4]": 64,
+    "[3, 3, 3, 3]": 65,
+    "[3, 3, 3, 4]": 66,
+    "[3, 3, 4, 4]": 67,
+    "[3, 4, 4, 4]": 68,
+    "[4, 4, 4, 4]": 69
+}
 
 # Actions
 #MOVEOUT = 0
@@ -33,21 +105,17 @@ class AI:
         self.curState = [HOME,HOME,HOME,HOME]
         self.reward = 0
 
-    def __init__(self,QTableFileName="QTable.npy",dataFileName="dataFile.txt",winRatesFileName="winRates.txt",alpha=0.5,gamma=0.9, epsilon=0.1, newQTable = False, newDataFile = False, loadOldWinrates = False):
+    def __init__(self,QTableFileName,alpha=0.5,gamma=0.9, epsilon=0.1, startFromScratch = False):
+        # Specifies if the AI started learning from scratch
+        self.startedFromScratch = startFromScratch
         # Attempt to load Q-table
-        if newQTable or not exists(QTableFileName):
-            self.QTable = np.zeros((pow(len(STATES),4),len(ACTIONS)*4+1))
+        if startFromScratch or not exists(QTableFileName):
+            numberOfStates = int(math.factorial(4 + len(STATES) - 1) / (math.factorial(4) * math.factorial(len(STATES)-1)))
+            self.QTable = np.zeros((numberOfStates, len(ACTIONS)*4+1))
         else:
             self.QTable = np.load(QTableFileName)
-        if newDataFile or not exists(dataFileName):
-            self.data = []
-        else:
-            self.data = np.loadtxt(dataFileName)
-        self.winRates = []
-        if loadOldWinrates and exists(winRatesFileName):
-            self.oldWinRates = np.loadtxt(winRatesFileName)
-        else:
-            self.oldWinRates = []
+        self.data = []
+        self.winRates = []   
         # Define the initial state
         self.reset()
         self.alpha = alpha
@@ -101,13 +169,16 @@ class AI:
             else:
                 newStates.append(SAFE)
         # Update the states
+        
         #print("Going from state", self.curState, "to state", newStates)
         self.prevState = self.curState
+        # Sort the new states, so that indexing becomes easier
+        newStates.sort()
         self.curState = newStates
 
     def getQValueIndex(self,state,action):
-        # Row index is the index of the current state, must be self.curState[0] + self.curState[1] * 5 + self.curState[2] * 25 + self.curState[3] * 125
-        rowIndex = state[0] + state[1] * 5 + state[2] * 25 + state[3] * 125
+        # Use the dictionary when indecing the states
+        rowIndex = sDict[str(state)]
         # Column index in Q-table must be pieceIndex + action + 5 * pieceIndex
         columnIndex = action[0] + action[1] + 5 * action[0]
         return [rowIndex,columnIndex]
@@ -255,6 +326,23 @@ class AI:
     def saveQTable(self,filename="QTable.npy"):
         np.save(filename,self.QTable)
 
+    def writeToTXTFile(self,filename,dataList,header):
+        # Default write mode is appending
+        writeMode = 'a'
+        # If the AI started from scratch, overwrite the file
+        if self.startedFromScratch:
+            writeMode = 'w'
+        # Open the file
+        file = open(filename, writeMode)
+        # Start by writing the header, if overwriting the file
+        if writeMode == 'w':
+            file.write(header + "\n")
+        for index, data in enumerate(dataList):
+            # If appending, write a new line to the file
+            if index == 0 and writeMode == 'a':
+                file.write("\n")
+            file.write(str(data) + ",")
+
     def saveDataFile(self,filename="dataFile.txt"):
         # Win rate
         winRate = self.getCurWinRate()
@@ -290,14 +378,10 @@ class AI:
         minPiece = int(math.floor(locationMinQ[1][0] / 6))
         minAction = locationMinQ[1][0] % 6
         qMinState = [qMin1Index, qMin2Index, qMin3Index, qMin4Index]
-
         # Create list with data
-        newData = np.array([winRate, percentZeroQTable, maxQ, qMaxState[0], qMaxState[1], qMaxState[2], qMaxState[3], maxPiece, maxAction, minQ, qMinState[0], qMinState[1], qMinState[2], qMinState[3], minPiece, minAction])
-        # Save it
-        # If list is not empty, Concat old and new array, with new array being the last row
-        if len(self.data) > 0:
-            newData = np.stack((self.data, newData))
-        np.savetxt(filename, newData, fmt='%1.3f',header="Winrate [%], Empty Q Table [%], Max Q, State 1, State 2, State 3, State 4, Piece, Action, Min Q, State 1, State 2, State 3, State 4, Piece, Action")
+        newData = [winRate, percentZeroQTable, maxQ, qMaxState[0], qMaxState[1], qMaxState[2], qMaxState[3], maxPiece, maxAction, minQ, qMinState[0], qMinState[1], qMinState[2], qMinState[3], minPiece, minAction]
+        # Write it to file
+        self.writeToTXTFile(filename,newData,"Winrate [%], Empty Q Table [%], Max Q, State 1, State 2, State 3, State 4, Piece, Action, Min Q, State 1, State 2, State 3, State 4, Piece, Action")
 
     def getNumberOfGamesPlayed(self):
         return self.numberOfGamesPlayed
@@ -309,13 +393,7 @@ class AI:
         self.winRates.append(self.getCurWinRate())
 
     def saveWinRates(self, filename="winRates.txt"):
-        # Make the winrates into a numpy array
-        winRates = np.array(self.winRates)
-        # If old win rates have been loaded, stack them
-        if len(self.oldWinRates) > 0:
-            winRates = np.stack((self.oldWinRates, self.winRates))
-        np.savetxt(filename, winRates, fmt='%1.3f',header="Winrates [%]")
-
+        self.writeToTXTFile(filename,self.winRates,"Winrates [%]")
 
 def getAvaliableActions(pieces, diceRoll, enemyPieces):
     """

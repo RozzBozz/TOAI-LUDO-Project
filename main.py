@@ -11,7 +11,7 @@ from ludoHelperFunctions import *
 # Which player number is the AI/human? (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played?
-numberOfGames = 101
+numberOfGames = 1000
 # How many opponents?
 numberOfOpponents = 3
 # Is the AI playing?
@@ -19,7 +19,7 @@ isAI = True
 # Should the AI train, or just exploit the current knowledge (Q-table)?
 shouldLearn = False
 # If the AI is training, should it start from scratch?
-shouldStartOver = False
+startFromScratch = False
 # Values for the hyper parameters of the AI (epsilon, alpha, gamma)
 parameters = [0.1, 0.5, 0.9]
 # If the human is playing, should moves be performed if they are the only choice?
@@ -34,14 +34,12 @@ if isAI == True:
     QTableFileName = "QTables/epsilon{}alpha{}gamma{}.npy".format(parameters[0],parameters[1],parameters[2])
     dataFileName = "dataFiles/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
     winRatesFileName = "winRates/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
-    if shouldStartOver:
-        print("---------- AI currently LEARNING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
-        ludoAI = AI(epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], newQTable=True, newDataFile=True)
+    if shouldLearn:
+        ludoAI = AI(QTableFileName = QTableFileName, epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], startFromScratch=startFromScratch)
+        print("---------- Currently LEARNING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
     else:
-        if not shouldLearn:
-            parameters[0] = 0
-        print("---------- AI currently TESTING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
-        ludoAI = AI(QTableFileName=QTableFileName, dataFileName=dataFileName, winRatesFileName=winRatesFileName, epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], loadOldWinrates= True)
+        ludoAI = AI(QTableFileName = QTableFileName, epsilon=0, alpha=parameters[1], gamma=parameters[2], startFromScratch=startFromScratch)
+        print("---------- Currently TESTING AIs trained with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
 else:
     # To keep track of how many wins the current player has
     winCounter = 0
