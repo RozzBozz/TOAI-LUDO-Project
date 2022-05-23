@@ -1,5 +1,6 @@
 from itertools import chain
 from sre_parse import State
+from statistics import mean
 from ludoHelperFunctions import *
 from os.path import exists
 import math
@@ -106,18 +107,27 @@ class AI:
         self.action = []
         self.curState = [HOME,HOME,HOME,HOME]
         self.reward = 0
+        self.itrNumber = 0
 
-    def __init__(self,QTableFileName,alpha=0.5,gamma=0.9, epsilon=0.1, startFromScratch = False):
+    def __init__(self,QTableFilePath,alpha=0.5,gamma=0.9, epsilon=0.1, newQTable = False):
+        """
+        QTableFilePath: full path of the Q-table
+        alpha: Desired alpha value
+        gamma: Desired gamma value
+        epsilon: Desired epsilon value
+        newQTable: If True, allocates a new Q-table instead of using the on loaded by default, or passed in QTableFilePath
+        """
         # Specifies if the AI started learning from scratch
-        self.startedFromScratch = startFromScratch
+        self.startedFromScratch = newQTable
         # Attempt to load Q-table
-        if startFromScratch or not exists(QTableFileName):
+        if newQTable or not exists(QTableFilePath):
             numberOfStates = int(math.factorial(4 + len(STATES) - 1) / (math.factorial(4) * math.factorial(len(STATES)-1)))
             self.QTable = np.zeros((numberOfStates, len(ACTIONS)))
         else:
-            self.QTable = np.load(QTableFileName)
+            self.QTable = np.load(QTableFilePath)
         self.data = []
-        self.winRates = []   
+        self.winRates = []
+        self.deltaQSum = 0   
         # Define the initial state
         self.reset()
         self.alpha = alpha
@@ -125,6 +135,26 @@ class AI:
         self.epsilon = epsilon
         self.numberOfGamesPlayed = 0
         self.numberOfWins = 0
+
+    def onePass(self, diceRoll, pieces, enemyPieces, shouldLearn = False):
+        """
+        diceRoll: Value of the dice rolled. Use diceroll of game observation
+        pieces: Indecies of the pieces of the of the player
+        enemyPieces: Indecies of the pieces of the enemy players
+        shouldLearn: If true, the AI updates the value of the Q-table for each move
+        """ 
+        if self.itrNumber != 0:
+            # Start by updating the state of the AI
+            self.updateState(pieces,enemyPieces)
+            # Estimate the reward for being in this state
+            if shouldLearn:
+                self.calculateReward(pieces)
+                # Update the Q-value of the previous state
+                self.updateQValue()
+        # Select an action   
+        self.selectAction(diceRoll, pieces, enemyPieces)
+        self.itrNumber += 1
+        return self.getPieceToMove()
 
     def addWin(self):
         self.numberOfWins += 1
@@ -197,7 +227,7 @@ class AI:
         #print("Got index", index)
         self.QTable[index[0],index[1]] = value
 
-    def selectAction(self,diceRoll,pieces,enemyPieces):
+    def selectAction(self,diceRoll,pieces,enemyPieces):       
         # Select an action based on the epsilon greedy action selection
         # The action set is a list with two elements, the first being the index of the piece moving, and the second the action chosen
 
@@ -244,7 +274,7 @@ class AI:
         # Get the index of the piece that was chosen by the AI to move during the last call to select action
         return self.pieceToMove
 
-    def calculateReward(self,round,pieces):
+    def calculateReward(self,pieces):
         # Calculate and set reward
         reward = 0
         for state in self.curState:
@@ -265,17 +295,17 @@ class AI:
             if piece < 52:
                 reward += piece / 216 - 0.25 # max is 0.25, min is 0.01.
         
-        # Decrease reward base on round timer
-        #reward -= round * 0.005
-        #print("Calculated reward", reward)
         self.reward = reward
 
     def updateQValue(self):
         oldQVal = self.getQValue(self.prevState,self.action)
         # Find the best action for the new state
         maxQval = 0
-        for i in range(0,len(ACTIONS)): # Always len(ACTIONS)+1 amount of actions, since the last action is stay, if no other actions are avaliable
-            curQVal = self.getQValue(self.curState,i)
+        possibleActions = getPossibleActions(self.curState)
+        for action in possibleActions:
+            if action == STAY:
+                continue
+            curQVal = self.getQValue(self.curState,action)
             if curQVal > maxQval:
                 maxQval = curQVal
         #print("Old Q value",oldQVal)
@@ -283,6 +313,7 @@ class AI:
         #print("Max Q value", maxQval)
         #print("self reward", self.reward)
         deltaQVal = self.alpha * (self.reward + self.gamma * maxQval - oldQVal)
+        self.deltaQSum += deltaQVal # Append delta Q val to array to see if it converges
         #print("New Q-value", newVal)
         # If the current action was to stay, make sure to call the update correctly
         self.setQValue(oldQVal + deltaQVal, self.prevState, self.action)        
@@ -311,7 +342,12 @@ class AI:
         # Win rate
         winRate = self.getCurWinRate()
         # Percent of Q table empty
-        percentZeroQTable = np.count_nonzero(self.QTable==0)/(self.QTable.shape[0]*self.QTable.shape[1])*100
+        nonZero = 0
+        for row in self.QTable:
+            for column in row:
+                if column != 0:
+                    nonZero += 1
+        percentZeroQTable = ((getRealQTableSize()-nonZero)/getRealQTableSize())*100
         # Max Q value
         maxQ = self.QTable.max()
         # Min Q value
@@ -352,12 +388,33 @@ class AI:
 
     def getNumberOfGamesWon(self):
         return self.numberOfWins
-    
-    def updateWinRates(self):
-        self.winRates.append(self.getCurWinRate())
 
+    def saveDeltaQs(self, filename="deltaQs.txt"):
+        self.writeToTXTFile(filename,self.deltaQSum,"Delta Qs")
+    
     def saveWinRates(self, filename="winRates.txt"):
         self.writeToTXTFile(filename,self.winRates,"Winrates [%]")
+
+def getPossibleActions( states):
+    """
+    For each state in the passed state, determine which states can actually be chosen from
+    """
+    possibleActions = []
+    for state in states:
+        if state == HOME:
+            possibleActions.append([MOVESAFE,MOVEATTACK])
+        elif state == GOAL:
+            possibleActions.append([])
+        elif state == APPROACHGOAL:
+            possibleActions.append([MOVESAFE,MOVEHOME])
+        elif state == DANGER or state == SAFE:
+            possibleActions.append([MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE])
+    # Only return unique actions
+    uniqueActions = list(set(chain(*possibleActions)))
+    # If list contains only state HOME and/or state GOAL, it can also perform action STAY
+    if (HOME in uniqueActions or GOAL in uniqueActions) and APPROACHGOAL not in uniqueActions and DANGER not in uniqueActions and SAFE not in uniqueActions:
+        uniqueActions.append[STAY]
+    return uniqueActions
 
 def getAvaliableActions(pieces, diceRoll, enemyPieces):
     """
@@ -404,3 +461,15 @@ def getAvaliableActions(pieces, diceRoll, enemyPieces):
             avaliableActions[index].append(MOVE)
 
     return avaliableActions
+
+def getRealQTableSize():
+    qTableSize = 0
+    for key in sDict:
+        # Omit square brackets
+        slice = key[1:-1]
+        # Squeeze string, so vals are next to each pther
+        slice = slice.replace(", ","")
+        # Make it to list
+        state = [int(x) for x in slice]
+        qTableSize += len(getPossibleActions(state))
+    return qTableSize
