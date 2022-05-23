@@ -11,35 +11,36 @@ from ludoHelperFunctions import *
 # Which player number is the AI (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played for each test?
-numberOfGames = 5000
+numberOfGames = 1000
 # How many opponents?
 numberOfOpponents = 3
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 # Should the AI start from scratch, or just exploit the current knowledge (Q-table)?
-shouldLearn = True
+shouldLearn = False
 # Should the AI allocate a new Q-table? WARNING! OVERWRITES CORRESPONDING FILES IN DIRECTORIES 'DATAFILES', 'QTABLES' AND 'WINRATES' IF TRUE
-resetQTable = True
+resetQTable = False
 
 # Values to be tested
-epsilons = [0.9] # 
-alphas = [0.25] # 
+epsilon = 0.9
+epsilonDecays = [0] # 
+alphas = [0.05] # 
 gammas = [0.7] # 
 
-for epsilon in epsilons:
+for epsilonDecay in epsilonDecays:
     for alpha in alphas:
         for gamma in gammas:
             # Initialization of AI
-            QTableFileName = "QTables/epsilon{}alpha{}gamma{}.npy".format(epsilon,alpha,gamma)
-            dataFileName = "dataFiles/epsilon{}alpha{}gamma{}.txt".format(epsilon,alpha,gamma)
-            winRatesFileName = "winRates/epsilon{}alpha{}gamma{}.txt".format(epsilon,alpha,gamma)
-            deltaQsFileName = "deltaQs/epsilon{}alpha{}gamma{}.txt".format(epsilon,alpha,gamma)
+            QTableFileName = "QTables/epsilonDecay{}alpha{}gamma{}.npy".format(epsilonDecay,alpha,gamma)
+            dataFileName = "dataFiles/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
+            winRatesFileName = "winRates/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
+            deltaQsFileName = "deltaQs/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
             if shouldLearn:
-                ludoAI = AI(QTableFileName, epsilon, alpha, gamma, resetQTable)
-                print("---------- Currently LEARNING with values epsilon", epsilon, "alpha", alpha, "gamma", gamma, "----------")
+                ludoAI = AI(QTableFileName, alpha, gamma, epsilon, newQTable = resetQTable)
+                print("---------- Currently LEARNING with values epsilonDecay", epsilonDecay, "alpha", alpha, "gamma", gamma, "----------")
             else:
-                ludoAI = AI(QTableFileName, epsilon, alpha, gamma, resetQTable)
-                print("---------- Currently TESTING AIs trained with values epsilon", epsilon, "alpha", alpha, "gamma", gamma, "----------")
+                ludoAI = AI(QTableFileName, alpha, gamma, 0, newQTable = resetQTable)
+                print("---------- Currently TESTING AIs trained with values epsilonDecay", epsilonDecay, "alpha", alpha, "gamma", gamma, "----------")
 
             for gameNumber in range(1,numberOfGames+1):
                 # Print every 100th game
@@ -88,6 +89,12 @@ for epsilon in epsilons:
                         # Specifies which piece is moved. If no pieces can be moved, it is set to -1
                         # If one or more pieces can be moved, this is set to the chosen piece, correpsonding to the index in the movePieces list
                         pieceToMoveIndex = ludoAI.onePass(diceRoll,playerPieces,enemyPieces,shouldLearn=shouldLearn)
+                        
+                        #img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round)
+                        #img = cv2.resize(img, (1088,900))
+                        #cv2.imshow("Current state of the board", img)
+                        #key = cv2.waitKey(0)
+                        #cv2.destroyWindow("Current state of the board")
                     else:
                         if len(movePieces):
                             if randomEnemies:
@@ -107,6 +114,11 @@ for epsilon in epsilons:
                 ludoAI.addGamePlayed()
                 if winningPlayer == playerNumber-1:
                     ludoAI.addWin()
+                ludoAI.addCurWinRate()
+                ludoAI.addCurDeltaQSum()
+                # Decay the epsilon-value after each game 
+                #if shouldLearn:
+                    #ludoAI.decayEpsilon(epsilonDecay)
                 #print("Number of games played:", ludoAI.getNumberOfGamesPlayed())
                 #print("Number of games won:", ludoAI.getNumberOfGamesWon())
                 #print("Current AI win rate: ", ludoAI.getCurWinRate() * 100, "%")

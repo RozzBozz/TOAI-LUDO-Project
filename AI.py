@@ -102,14 +102,16 @@ ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE,STAY]
 
 class AI:
 
-    def reset(self,):
+    def reset(self):
         self.prevState = []
         self.action = []
         self.curState = [HOME,HOME,HOME,HOME]
         self.reward = 0
         self.itrNumber = 0
+        self.deltaQSum = 0
+        # I should reset the epsilon value
 
-    def __init__(self,QTableFilePath,alpha=0.5,gamma=0.9, epsilon=0.1, newQTable = False):
+    def __init__(self, QTableFilePath, alpha=0.5, gamma=0.9, epsilon=0.9, epsilonDecay = 0.02, newQTable = False):
         """
         QTableFilePath: full path of the Q-table
         alpha: Desired alpha value
@@ -127,14 +129,17 @@ class AI:
             self.QTable = np.load(QTableFilePath)
         self.data = []
         self.winRates = []
-        self.deltaQSum = 0   
+        self.deltaQSum = 0
+        self.deltaQSums = []
         # Define the initial state
         self.reset()
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+        self.epsilonDecay = epsilonDecay
         self.numberOfGamesPlayed = 0
         self.numberOfWins = 0
+        
 
     def onePass(self, diceRoll, pieces, enemyPieces, shouldLearn = False):
         """
@@ -156,11 +161,18 @@ class AI:
         self.itrNumber += 1
         return self.getPieceToMove()
 
+    def decayEpsilon(self, decay):
+        self.epsilon = self.epsilon - self.epsilon * decay
+        print(self.epsilon)
+
     def addWin(self):
         self.numberOfWins += 1
 
     def addGamePlayed(self):
         self.numberOfGamesPlayed += 1
+
+    def addCurWinRate(self):
+        self.winRates.append(self.getCurWinRate())
 
     def getCurWinRate(self):
         return self.numberOfWins / self.numberOfGamesPlayed * 100
@@ -204,13 +216,13 @@ class AI:
         
         #print("Going from state", self.curState, "to state", newStates)
         self.prevState = self.curState
-        # Sort the new states, so that indexing becomes easier
-        newStates.sort()
         self.curState = newStates
 
     def getQValueIndex(self,state,action):
         # Use the dictionary when indecing the states
-        rowIndex = sDict[str(state)]
+        stateSorted = state.copy()
+        stateSorted.sort()
+        rowIndex = sDict[str(stateSorted)]
         # Column index in Q-table must be pieceIndex + action + 5 * pieceIndex
         columnIndex = action
         return [rowIndex,columnIndex]
@@ -275,25 +287,42 @@ class AI:
         return self.pieceToMove
 
     def calculateReward(self,pieces):
-        # Calculate and set reward
+        # Calculate reward
         reward = 0
-        for state in self.curState:
-            if state == HOME:
+        # Is based on the action chosen
+        if self.action == MOVESAFE:
+            reward += 1
+        if self.action == MOVESTAR:
+            reward += 0.5
+        if self.action == MOVEHOME:
+            reward += 0.5
+        if self.action == MOVEATTACK:
+            reward += 0.25
+        if self.action == MOVESUICIDE:
+            reward -= 1
+        if self.action == MOVE or self.action == STAY:
+            reward += 0
+        # And the state of the piece chosen to move
+        # If the chosen piece is minus one, the reward is zero, since it didn't really choose it
+        if self.pieceToMove == -1:
+            reward += 0
+        else:
+            if self.curState[self.pieceToMove] == HOME:
                 reward -= 0.5
-            elif state == GOAL:
-                reward += 1 # 2
-            elif state == APPROACHGOAL:
-                reward += 1 # 2
-            elif state == DANGER:
+            elif self.curState[self.pieceToMove] == GOAL:
+                reward += 1
+            elif self.curState[self.pieceToMove] == APPROACHGOAL:
+                reward += 1
+            elif self.curState[self.pieceToMove] == DANGER:
                 reward -= 0.5
-            elif state == SAFE:
-                reward += 0.5 # 1
-        
-        # Decrease reward based on distance to goal zone
-        for piece in pieces:
-            #reward += piece / 39.3 - 0.5
-            if piece < 52:
-                reward += piece / 216 - 0.25 # max is 0.25, min is 0.01.
+            elif self.curState[self.pieceToMove] == SAFE:
+                reward += 0.5
+            # With an increase to reward based on distance to goal zone
+            # Max is one in goal zone, min is 0 when at home
+            if pieces[self.pieceToMove] > 52:
+                reward += 1
+            else:
+                reward += pieces[self.pieceToMove] / 53
         
         self.reward = reward
 
@@ -390,12 +419,15 @@ class AI:
         return self.numberOfWins
 
     def saveDeltaQs(self, filename="deltaQs.txt"):
-        self.writeToTXTFile(filename,self.deltaQSum,"Delta Qs")
+        self.writeToTXTFile(filename,self.deltaQSums,"Delta Qs")
     
     def saveWinRates(self, filename="winRates.txt"):
         self.writeToTXTFile(filename,self.winRates,"Winrates [%]")
 
-def getPossibleActions( states):
+    def addCurDeltaQSum(self):
+        self.deltaQSums.append(self.deltaQSum)
+
+def getPossibleActions(states):
     """
     For each state in the passed state, determine which states can actually be chosen from
     """
