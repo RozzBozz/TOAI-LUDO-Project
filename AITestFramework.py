@@ -19,14 +19,14 @@ resetQTableAfterTest = True
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 # Should the AI start from scratch, or just exploit the current knowledge (Q-table)?
-shouldLearn = True
-# Should the AI start from scratch? WARNING! DELETES CORRESPONDING FILES IN DIRECTORIES 'DATAFILES', 'QTABLES' AND 'WINRATES'
-startFromScratch = True
+shouldLearn = False
+# Should the AI start from scratch? WARNING! DELETES CORRESPONDING FILES IN DIRECTORIES 'DATAFILES', 'QTABLES' AND 'WINRATES' IF TRUE
+startFromScratch = False
 
 # Values to be tested
-epsilons = [0.1, 0.5, 0.9]
-alphas = [0.25, 0.5, 0.75]
-gammas = [0.5, 0.7, 0.9]
+epsilons = [0.1, 0.5, 0.9] # 
+alphas = [0.25, 0.5, 0.75] # 
+gammas = [0.5, 0.7, 0.9] # 
 
 for epsilon in epsilons:
     for alpha in alphas:
@@ -98,9 +98,9 @@ for epsilon in epsilons:
                                 # Update the Q-value of the previous state
                                 ludoAI.updateQValue()
                         doSRupdate = True
-                        # Select an action
+                        # Select an action   
                         ludoAI.selectAction(diceRoll=diceRoll, pieces=playerPieces, enemyPieces=enemyPieces)
-                        pieceToMoveIndex = ludoAI.getPieceIndexMove()            
+                        pieceToMoveIndex = ludoAI.getPieceToMove()
                     else:
                         if len(movePieces):
                             if randomEnemies:

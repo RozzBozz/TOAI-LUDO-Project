@@ -1,3 +1,4 @@
+from itertools import chain
 from sre_parse import State
 from ludoHelperFunctions import *
 from os.path import exists
@@ -93,7 +94,8 @@ MOVEHOME = 2
 MOVEATTACK = 3
 MOVESUICIDE = 4
 MOVE = 5
-ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE]
+STAY = 6 # Only valid if no other actions are avaliable
+ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE,STAY]
 
 # Rewards
 
@@ -111,7 +113,7 @@ class AI:
         # Attempt to load Q-table
         if startFromScratch or not exists(QTableFileName):
             numberOfStates = int(math.factorial(4 + len(STATES) - 1) / (math.factorial(4) * math.factorial(len(STATES)-1)))
-            self.QTable = np.zeros((numberOfStates, len(ACTIONS)*4+1))
+            self.QTable = np.zeros((numberOfStates, len(ACTIONS)))
         else:
             self.QTable = np.load(QTableFileName)
         self.data = []
@@ -180,7 +182,7 @@ class AI:
         # Use the dictionary when indecing the states
         rowIndex = sDict[str(state)]
         # Column index in Q-table must be pieceIndex + action + 5 * pieceIndex
-        columnIndex = action[0] + action[1] + 5 * action[0]
+        columnIndex = action
         return [rowIndex,columnIndex]
     
     def getQValue(self,state,action):
@@ -201,73 +203,46 @@ class AI:
 
         actions = getAvaliableActions(pieces,diceRoll,enemyPieces)
         #print("Got actions:", actions)
-
-        # Check if there are any valid actions, otherwise set to [-1 24]
-        lenPieceActions = []
-        for actionList in actions:
-            lenPieceActions.append(len(actionList))
-        if sum(lenPieceActions) == 0:
-            self.action = [-1, 24]
+        # Get the unique actions avaliable.
+        uniqueActions = list(set(chain(*actions)))
+        # If the list is empty, set the piece to -1 (the piece the game needs to stay) and the index to the STAY action
+        if len(uniqueActions) == 0:
+            self.action = 6
+            self.pieceToMove = -1
         else:
-            # Remove all pieces, who don't have any actions
-            avaliablePieces = []
-            for index, _ in enumerate(lenPieceActions):
-                if lenPieceActions[index] != 0:
-                    avaliablePieces.append(index)
-
+            # Select if the choice should be random, or max
             randomActionChance = np.random.randint(0, 100) # (0 to 99)
             #print("Random Action selection, rolled", randomActionChance)
+            # Controls which action is chosen.
+            # Per default, the chosen actions is the first unique action
+            chosenAction = uniqueActions[0]
+            chosenPiece = 0
             if randomActionChance < self.epsilon:
-                # Select one of the avaliable pieces at random
-                #print("AI chose a random action!")
-                #print("Avaliable Pieces", avaliablePieces)
-                if len(avaliablePieces) == 1:
-                    pieceIndex = avaliablePieces[0]
-                    #print("Only one valid piece! Chose number", pieceIndex)
-                    if len(actions[pieceIndex]) == 1:
-                        self.action = [pieceIndex,actions[pieceIndex][0]]
-                        #print("And only one valid action! Chose action", actions[pieceIndex][0])
-                    else:
-                        actionIndex = np.random.randint(0,len(actions[pieceIndex]))
-                        self.action = [pieceIndex,actions[pieceIndex][actionIndex]]
-                        #print("But more than one action! Chose action", actions[pieceIndex][actionIndex])
-                else:
-                    pieceIndex = np.random.randint(0,len(avaliablePieces))
-                    #print("More than one valid piece! Chose number", avaliablePieces[pieceIndex])
-                    if len(actions[avaliablePieces[pieceIndex]]) == 1:
-                        self.action = [avaliablePieces[pieceIndex],actions[avaliablePieces[pieceIndex]][0]]
-                        #print("But only one valid action! Chose action", actions[avaliablePieces[pieceIndex]][0])
-                    else:
-                        actionIndex = np.random.randint(0,len(actions[avaliablePieces[pieceIndex]]))
-                        self.action = [avaliablePieces[pieceIndex],actions[avaliablePieces[pieceIndex]][actionIndex]]
-                        #print("And more than one action! Chose action", actions[pieceIndex][actionIndex])
+                # Choose between one of the unique actions
+                randomAction = np.random.randint(0,len(uniqueActions))
+                chosenAction = uniqueActions[randomAction]
             else:
-                #print("AI is choosing max action!")
-                #print("From pieces", avaliablePieces)
-                bestPieceNumber, bestQVal, bestAction = 0, 0, 0
-                firstAction = True
-                for pieceIndex in avaliablePieces:
-                    for action in actions[pieceIndex]:
-                        curQVal = self.getQValue(self.curState,[pieceIndex,action])
-                        # If this is the first action that's being checked, set that as the benchmark to beat
-                        if firstAction:
-                            bestQVal = curQVal
-                            bestPieceNumber = pieceIndex
-                            bestAction = action
-                            firstAction = False
-                            continue
-                        # If this Q-value is better than the current, update it                       
-                        if curQVal > bestQVal:
-                            bestQVal = curQVal
-                            bestPieceNumber = pieceIndex
-                            bestAction = action
-                #print("The max action chosen was", [bestPieceNumber,bestAction])
-                #print("With Q-value", bestQVal)
-                self.action = [bestPieceNumber,bestAction]
+                bestQVal = 0
+                # Iterate through unique actions, find the largest Q-value
+                # This is protected, because the chosenAction is set to the first unique action per default,
+                # so even if no better q-value is found, the chosen actions is still valid
+                for action in uniqueActions:
+                    curQVal = self.getQValue(self.curState, action)
+                    if curQVal > bestQVal:
+                        bestQVal = curQVal
+                        chosenAction = action
 
-    def getPieceIndexMove(self):
+            # Choose the piece to which the actions is associated, or the first if there are multiple
+            for index, actionList in enumerate(actions):
+                if chosenAction in actionList:
+                    chosenPiece = index
+                    break
+            self.action = chosenAction
+            self.pieceToMove = chosenPiece
+
+    def getPieceToMove(self):
         # Get the index of the piece that was chosen by the AI to move during the last call to select action
-        return self.action[0]
+        return self.pieceToMove
 
     def calculateReward(self,round,pieces):
         # Calculate and set reward
@@ -296,21 +271,13 @@ class AI:
         self.reward = reward
 
     def updateQValue(self):
-        if self.action[1] == 24: # No valid action, AI must stay
-            oldQVal = self.getQValue(self.prevState,[0,24])
-        else:
-            oldQVal = self.getQValue(self.prevState,self.action)
+        oldQVal = self.getQValue(self.prevState,self.action)
         # Find the best action for the new state
         maxQval = 0
-        for i in range (0,4): # Always four pieces
-            for j in range(0,len(ACTIONS)): # Always len(ACTIONS)+1 amount of actions, since the last action is stay, if no other actions are avaliable
-                curQVal = self.getQValue(self.curState,[i,j])
-                if curQVal > maxQval:
-                    maxQval = curQVal
-        # Also check the stay Q-value
-        stayQVal = self.getQValue(self.curState,[0,24])
-        if stayQVal > curQVal:
-            maxQval = stayQVal
+        for i in range(0,len(ACTIONS)): # Always len(ACTIONS)+1 amount of actions, since the last action is stay, if no other actions are avaliable
+            curQVal = self.getQValue(self.curState,i)
+            if curQVal > maxQval:
+                maxQval = curQVal
         #print("Old Q value",oldQVal)
         #print("abs of that",abs(oldQVal))
         #print("Max Q value", maxQval)
@@ -318,10 +285,7 @@ class AI:
         deltaQVal = self.alpha * (self.reward + self.gamma * maxQval - oldQVal)
         #print("New Q-value", newVal)
         # If the current action was to stay, make sure to call the update correctly
-        if self.action[1] == 24:
-            self.setQValue(oldQVal + deltaQVal, self.prevState, [0,24])  
-        else:
-            self.setQValue(oldQVal + deltaQVal, self.prevState, self.action)        
+        self.setQValue(oldQVal + deltaQVal, self.prevState, self.action)        
 
     def saveQTable(self,filename="QTable.npy"):
         np.save(filename,self.QTable)
