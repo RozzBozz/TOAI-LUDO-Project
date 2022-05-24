@@ -380,6 +380,8 @@ class AI:
                 reward -= 0.5
             elif self.nextState[self.pieceToMove] == SAFE:
                 reward += 0.5
+            elif self.nextState[self.pieceToMove] == NORMAL:
+                reward += 0.5
         
         self.reward = reward
 
