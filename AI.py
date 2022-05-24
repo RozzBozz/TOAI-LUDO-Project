@@ -1,6 +1,8 @@
 from itertools import chain
 from sre_parse import State
 from statistics import mean
+
+from cv2 import getStructuringElement
 from ludoHelperFunctions import *
 from os.path import exists
 import math
@@ -103,15 +105,10 @@ ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE,STAY]
 class AI:
 
     def reset(self):
-        self.prevState = []
-        self.action = []
-        self.curState = [HOME,HOME,HOME,HOME]
-        self.reward = 0
-        self.itrNumber = 0
+        self.firstPass = True
         self.deltaQSum = 0
-        # I should reset the epsilon value
 
-    def __init__(self, QTableFilePath, alpha=0.5, gamma=0.9, epsilon=0.9, epsilonDecay = 0.02, newQTable = False):
+    def __init__(self, QTableFilePath, alpha=0.5, gamma=0.9, epsilon=0, epsilonDecay = 0.02):
         """
         QTableFilePath: full path of the Q-table
         alpha: Desired alpha value
@@ -119,18 +116,21 @@ class AI:
         epsilon: Desired epsilon value
         newQTable: If True, allocates a new Q-table instead of using the on loaded by default, or passed in QTableFilePath
         """
-        # Specifies if the AI started learning from scratch
-        self.startedFromScratch = newQTable
         # Attempt to load Q-table
-        if newQTable or not exists(QTableFilePath):
+        if not exists(QTableFilePath):
+            self.startedFromScratch = True
             numberOfStates = int(math.factorial(4 + len(STATES) - 1) / (math.factorial(4) * math.factorial(len(STATES)-1)))
             self.QTable = np.zeros((numberOfStates, len(ACTIONS)))
         else:
+            self.startedFromScratch = False
             self.QTable = np.load(QTableFilePath)
+        
         self.data = []
         self.winRates = []
         self.deltaQSum = 0
         self.deltaQSums = []
+        # Tells onePass, that the AI has just been initialized
+        self.firstPass = False
         # Define the initial state
         self.reset()
         self.alpha = alpha
@@ -139,30 +139,37 @@ class AI:
         self.epsilonDecay = epsilonDecay
         self.numberOfGamesPlayed = 0
         self.numberOfWins = 0
+        self.curState = []
+        self.nextState = []
+        self.action = 0
         
-
     def onePass(self, diceRoll, pieces, enemyPieces, shouldLearn = False):
         """
         diceRoll: Value of the dice rolled. Use diceroll of game observation
         pieces: Indecies of the pieces of the of the player
         enemyPieces: Indecies of the pieces of the enemy players
-        shouldLearn: If true, the AI updates the value of the Q-table for each move
+        shouldLearn: If true, the AI learns
         """ 
-        if self.itrNumber != 0:
-            # Start by updating the state of the AI
-            self.updateState(pieces,enemyPieces)
+        if not self.firstPass:
             # Estimate the reward for being in this state
+            self.nextState = self.getState(pieces,enemyPieces)
             if shouldLearn:
                 self.calculateReward(pieces)
-                # Update the Q-value of the previous state
+                # Update the Q-value of the current state
                 self.updateQValue()
-        # Select an action   
+            # Start by updating the state of the AI 
+        self.firstPass = False
+        # Select an action 
+        self.curState = self.getState(pieces,enemyPieces)  
         self.selectAction(diceRoll, pieces, enemyPieces)
-        self.itrNumber += 1
         return self.getPieceToMove()
 
     def decayEpsilon(self, decay):
-        self.epsilon = self.epsilon - self.epsilon * decay
+        """
+        Decays the epsilon-value of the AI. (epsilon = epsilon * (100 - decay))
+        decay (int) decay in percentage
+        """
+        self.epsilon = self.epsilon * (1 - decay/100)
         print(self.epsilon)
 
     def addWin(self):
@@ -175,16 +182,15 @@ class AI:
         self.winRates.append(self.getCurWinRate())
 
     def getCurWinRate(self):
-        return self.numberOfWins / self.numberOfGamesPlayed * 100
+        return self.getNumberOfGamesWon() / self.getNumberOfGamesPlayed() * 100
 
     def getCurState(self):
         return self.curState
 
-    def getPrevState(self):
-        return self.prevState
+    def getNextState(self):
+        return self.nextState
 
-    def updateState(self,pieces,enemyPieces):
-        # Update state based on current board
+    def getState(self,pieces,enemyPieces):
         newStates = []
         for index,piece in enumerate(pieces):
             otherPieces = np.delete(pieces,index)
@@ -212,11 +218,7 @@ class AI:
             # If no of the other states apply, the state of the current piece is safe
             else:
                 newStates.append(SAFE)
-        # Update the states
-        
-        #print("Going from state", self.curState, "to state", newStates)
-        self.prevState = self.curState
-        self.curState = newStates
+        return newStates
 
     def getQValueIndex(self,state,action):
         # Use the dictionary when indecing the states
@@ -243,7 +245,7 @@ class AI:
         # Select an action based on the epsilon greedy action selection
         # The action set is a list with two elements, the first being the index of the piece moving, and the second the action chosen
 
-        actions = getAvaliableActions(pieces,diceRoll,enemyPieces)
+        actions = self.getAvaliableActions(pieces,diceRoll,enemyPieces)
         #print("Got actions:", actions)
         # Get the unique actions avaliable.
         uniqueActions = list(set(chain(*actions)))
@@ -302,39 +304,39 @@ class AI:
             reward -= 1
         if self.action == MOVE or self.action == STAY:
             reward += 0
-        # And the state of the piece chosen to move
+        # And the next state
         # If the chosen piece is minus one, the reward is zero, since it didn't really choose it
         if self.pieceToMove == -1:
             reward += 0
         else:
-            if self.curState[self.pieceToMove] == HOME:
+            if self.nextState[self.pieceToMove] == HOME:
                 reward -= 0.5
-            elif self.curState[self.pieceToMove] == GOAL:
+            elif self.nextState[self.pieceToMove] == GOAL:
                 reward += 1
-            elif self.curState[self.pieceToMove] == APPROACHGOAL:
+            elif self.nextState[self.pieceToMove] == APPROACHGOAL:
                 reward += 1
-            elif self.curState[self.pieceToMove] == DANGER:
+            elif self.nextState[self.pieceToMove] == DANGER:
                 reward -= 0.5
-            elif self.curState[self.pieceToMove] == SAFE:
+            elif self.nextState[self.pieceToMove] == SAFE:
                 reward += 0.5
             # With an increase to reward based on distance to goal zone
             # Max is one in goal zone, min is 0 when at home
-            if pieces[self.pieceToMove] > 52:
-                reward += 1
-            else:
-                reward += pieces[self.pieceToMove] / 53
+            #if pieces[self.pieceToMove] > 52:
+                #reward += 1
+            #else:
+                #reward += pieces[self.pieceToMove] / 53
         
         self.reward = reward
 
     def updateQValue(self):
-        oldQVal = self.getQValue(self.prevState,self.action)
+        oldQVal = self.getQValue(self.curState,self.action)
         # Find the best action for the new state
         maxQval = 0
-        possibleActions = getPossibleActions(self.curState)
+        possibleActions = self.getPossibleActions(self.nextState)
         for action in possibleActions:
             if action == STAY:
                 continue
-            curQVal = self.getQValue(self.curState,action)
+            curQVal = self.getQValue(self.nextState,action)
             if curQVal > maxQval:
                 maxQval = curQVal
         #print("Old Q value",oldQVal)
@@ -345,7 +347,7 @@ class AI:
         self.deltaQSum += deltaQVal # Append delta Q val to array to see if it converges
         #print("New Q-value", newVal)
         # If the current action was to stay, make sure to call the update correctly
-        self.setQValue(oldQVal + deltaQVal, self.prevState, self.action)        
+        self.setQValue(oldQVal + deltaQVal, self.curState, self.action)        
 
     def saveQTable(self,filename="QTable.npy"):
         np.save(filename,self.QTable)
@@ -376,7 +378,7 @@ class AI:
             for column in row:
                 if column != 0:
                     nonZero += 1
-        percentZeroQTable = ((getRealQTableSize()-nonZero)/getRealQTableSize())*100
+        percentZeroQTable = ((self.getRealQTableSize()-nonZero)/self.getRealQTableSize())*100
         # Max Q value
         maxQ = self.QTable.max()
         # Min Q value
@@ -427,81 +429,81 @@ class AI:
     def addCurDeltaQSum(self):
         self.deltaQSums.append(self.deltaQSum)
 
-def getPossibleActions(states):
-    """
-    For each state in the passed state, determine which states can actually be chosen from
-    """
-    possibleActions = []
-    for state in states:
-        if state == HOME:
-            possibleActions.append([MOVESAFE,MOVEATTACK])
-        elif state == GOAL:
-            possibleActions.append([])
-        elif state == APPROACHGOAL:
-            possibleActions.append([MOVESAFE,MOVEHOME])
-        elif state == DANGER or state == SAFE:
-            possibleActions.append([MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE])
-    # Only return unique actions
-    uniqueActions = list(set(chain(*possibleActions)))
-    # If list contains only state HOME and/or state GOAL, it can also perform action STAY
-    if (HOME in uniqueActions or GOAL in uniqueActions) and APPROACHGOAL not in uniqueActions and DANGER not in uniqueActions and SAFE not in uniqueActions:
-        uniqueActions.append[STAY]
-    return uniqueActions
+    def getPossibleActions(self, states):
+        """
+        For each state in the passed state, determine which states can actually be chosen from
+        """
+        possibleActions = []
+        for state in states:
+            if state == HOME:
+                possibleActions.append([MOVESAFE,MOVEATTACK])
+            elif state == GOAL:
+                possibleActions.append([])
+            elif state == APPROACHGOAL:
+                possibleActions.append([MOVESAFE,MOVEHOME])
+            elif state == DANGER or state == SAFE:
+                possibleActions.append([MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE])
+        # Only return unique actions
+        uniqueActions = list(set(chain(*possibleActions)))
+        # If list contains only state HOME and/or state GOAL, it can also perform action STAY
+        if (HOME in uniqueActions or GOAL in uniqueActions) and APPROACHGOAL not in uniqueActions and DANGER not in uniqueActions and SAFE not in uniqueActions:
+            uniqueActions.append[STAY]
+        return uniqueActions
 
-def getAvaliableActions(pieces, diceRoll, enemyPieces):
-    """
-    Returns avaliable actions for all pieces in list of lists. All pieces will have zero or more actions
-    """
-    avaliableActions = [[],[],[],[]]
-    for index,piece in enumerate(pieces):
-        otherPieces = np.delete(pieces,index)
+    def getAvaliableActions(self, pieces, diceRoll, enemyPieces):
+        """
+        Returns avaliable actions for all pieces in list of lists. All pieces will have zero or more actions
+        """
+        avaliableActions = [[],[],[],[]]
+        for index,piece in enumerate(pieces):
+            otherPieces = np.delete(pieces,index)
 
-        # MOVEOUT
-        # If a six is rolled, the piece can move out from home
-        #if canMoveOut(piece,diceRoll):
-        #    avaliableActions[index].append(MOVEOUT)
-        #    continue
-    
-        # MOVESAFE
-        # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
-        if canMoveSafe(piece, otherPieces, diceRoll, enemyPieces):
-            avaliableActions[index].append(MOVESAFE)
+            # MOVEOUT
+            # If a six is rolled, the piece can move out from home
+            #if canMoveOut(piece,diceRoll):
+            #    avaliableActions[index].append(MOVEOUT)
+            #    continue
+        
+            # MOVESAFE
+            # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
+            if canMoveSafe(piece, otherPieces, diceRoll, enemyPieces):
+                avaliableActions[index].append(MOVESAFE)
 
-        # MOVESTAR
-        # If the piece can go to a space containing a star, where there aren't two enemy pieces
-        if canMoveStar(piece,diceRoll,enemyPieces):
-            avaliableActions[index].append(MOVESTAR)
+            # MOVESTAR
+            # If the piece can go to a space containing a star, where there aren't two enemy pieces
+            if canMoveStar(piece,diceRoll,enemyPieces):
+                avaliableActions[index].append(MOVESTAR)
 
-        # MOVEHOME
-        # If the piece can move
-        if canMoveHome(piece,diceRoll,enemyPieces):
-            avaliableActions[index].append(MOVEHOME)
+            # MOVEHOME
+            # If the piece can move
+            if canMoveHome(piece,diceRoll,enemyPieces):
+                avaliableActions[index].append(MOVEHOME)
 
-        # MOVEATTACK
-        # If the piece can go to the same space as an enemy piece that is not safe
-        if canAttack(piece,diceRoll,enemyPieces):
-            avaliableActions[index].append(MOVEATTACK)
+            # MOVEATTACK
+            # If the piece can go to the same space as an enemy piece that is not safe
+            if canAttack(piece,diceRoll,enemyPieces):
+                avaliableActions[index].append(MOVEATTACK)
 
-        # MOVESUICIDE
-        # If the piece can move to a tile that results in it being knocked home
-        if canSuicide(piece,diceRoll,enemyPieces):
-            avaliableActions[index].append(MOVESUICIDE)
+            # MOVESUICIDE
+            # If the piece can move to a tile that results in it being knocked home
+            if canSuicide(piece,diceRoll,enemyPieces):
+                avaliableActions[index].append(MOVESUICIDE)
 
-        # MOVE
-        # A piece can always move if no other move are avaliable, and it is not at home or in goal
-        if canMove(piece) and len(avaliableActions[index]) == 0:
-            avaliableActions[index].append(MOVE)
+            # MOVE
+            # A piece can always move if no other move are avaliable, and it is not at home or in goal
+            if canMove(piece) and len(avaliableActions[index]) == 0:
+                avaliableActions[index].append(MOVE)
 
-    return avaliableActions
+        return avaliableActions
 
-def getRealQTableSize():
-    qTableSize = 0
-    for key in sDict:
-        # Omit square brackets
-        slice = key[1:-1]
-        # Squeeze string, so vals are next to each pther
-        slice = slice.replace(", ","")
-        # Make it to list
-        state = [int(x) for x in slice]
-        qTableSize += len(getPossibleActions(state))
-    return qTableSize
+    def getRealQTableSize(self):
+        qTableSize = 0
+        for key in sDict:
+            # Omit square brackets
+            slice = key[1:-1]
+            # Squeeze string, so vals are next to each pther
+            slice = slice.replace(", ","")
+            # Make it to list
+            state = [int(x) for x in slice]
+            qTableSize += len(self.getPossibleActions(state))
+        return qTableSize

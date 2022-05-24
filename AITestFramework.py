@@ -11,21 +11,19 @@ from ludoHelperFunctions import *
 # Which player number is the AI (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played for each test?
-numberOfGames = 1000
+numberOfGames = 100
 # How many opponents?
 numberOfOpponents = 3
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 # Should the AI start from scratch, or just exploit the current knowledge (Q-table)?
 shouldLearn = False
-# Should the AI allocate a new Q-table? WARNING! OVERWRITES CORRESPONDING FILES IN DIRECTORIES 'DATAFILES', 'QTABLES' AND 'WINRATES' IF TRUE
-resetQTable = False
 
 # Values to be tested
 epsilon = 0.9
-epsilonDecays = [0] # 
-alphas = [0.05] # 
-gammas = [0.7] # 
+epsilonDecays = [0.2] # [%]
+alphas = [0.2] # 
+gammas = [0.8] # 
 
 for epsilonDecay in epsilonDecays:
     for alpha in alphas:
@@ -35,12 +33,7 @@ for epsilonDecay in epsilonDecays:
             dataFileName = "dataFiles/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
             winRatesFileName = "winRates/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
             deltaQsFileName = "deltaQs/epsilonDecay{}alpha{}gamma{}.txt".format(epsilonDecay,alpha,gamma)
-            if shouldLearn:
-                ludoAI = AI(QTableFileName, alpha, gamma, epsilon, newQTable = resetQTable)
-                print("---------- Currently LEARNING with values epsilonDecay", epsilonDecay, "alpha", alpha, "gamma", gamma, "----------")
-            else:
-                ludoAI = AI(QTableFileName, alpha, gamma, 0, newQTable = resetQTable)
-                print("---------- Currently TESTING AIs trained with values epsilonDecay", epsilonDecay, "alpha", alpha, "gamma", gamma, "----------")
+            ludoAI = AI(QTableFileName, alpha, gamma, epsilon, epsilonDecay)
 
             for gameNumber in range(1,numberOfGames+1):
                 # Print every 100th game
@@ -61,7 +54,8 @@ for epsilonDecay in epsilonDecays:
                 # Stores the round number of the current game
                 round = 0
                 # Reset the state of the AI
-                ludoAI.reset()
+                if shouldLearn:
+                    ludoAI.reset()
                 # Specifies, that a state update, reward calculation and Q-table update shouldn't be done in the first round
                 doSRupdate = False
 
@@ -117,8 +111,8 @@ for epsilonDecay in epsilonDecays:
                 ludoAI.addCurWinRate()
                 ludoAI.addCurDeltaQSum()
                 # Decay the epsilon-value after each game 
-                #if shouldLearn:
-                    #ludoAI.decayEpsilon(epsilonDecay)
+                if shouldLearn:
+                    ludoAI.decayEpsilon(epsilonDecay)
                 #print("Number of games played:", ludoAI.getNumberOfGamesPlayed())
                 #print("Number of games won:", ludoAI.getNumberOfGamesWon())
                 #print("Current AI win rate: ", ludoAI.getCurWinRate() * 100, "%")
