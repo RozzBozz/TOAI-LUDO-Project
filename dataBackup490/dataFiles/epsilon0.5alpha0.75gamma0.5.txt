@@ -1,3 +1,0 @@
-Winrate [%], Empty Q Table [%], Max Q, State 1, State 2, State 3, State 4, Piece, Action, Min Q, State 1, State 2, State 3, State 4, Piece, Action
-30.9,46.12244897959184,8.0,1,3,1,0,0,0,-3.0,0,0,0,0,1,0,
-36.7,46.12244897959184,8.0,1,3,1,0,0,0,-3.0,0,0,0,0,1,0,

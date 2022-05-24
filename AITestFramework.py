@@ -11,7 +11,7 @@ from ludoHelperFunctions import *
 # Which player number is the AI (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played for each test?
-numberOfGames = 100
+numberOfGames = 1000
 # How many opponents?
 numberOfOpponents = 3
 # Are the enemies random players or semi smart players?
@@ -82,7 +82,7 @@ for epsilonDecay in epsilonDecays:
                     if curPlayer == playerNumber-1:
                         # Specifies which piece is moved. If no pieces can be moved, it is set to -1
                         # If one or more pieces can be moved, this is set to the chosen piece, correpsonding to the index in the movePieces list
-                        pieceToMoveIndex = ludoAI.onePass(diceRoll,playerPieces,enemyPieces,shouldLearn=shouldLearn)
+                        pieceToMoveIndex = ludoAI.onePass(diceRoll,playerPieces,enemyPieces,shouldLearn)
                         
                         #img = ludopy.visualizer.make_img_of_board(allPieces, diceRoll, 3, round)
                         #img = cv2.resize(img, (1088,900))

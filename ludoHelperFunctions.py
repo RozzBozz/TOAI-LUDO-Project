@@ -266,21 +266,16 @@ def canAttack(piece, diceRoll, enemyPieces):
             diceRoll (int) What the dice rolled
     Output (bool) True if the piece can attack an enemy piece, False otherwise
     """
-
-    if piece == 0 and not canMoveOut(piece,diceRoll):
-        return False
-    # If the piece is at home, can move out, and one enemy piece is on the home globe, it can attack
-    elif canMoveOut(piece,diceRoll) and numberOfEnemiesAtTile(1,enemyPieces) == 1:
-        return True
-    
     nextTile = piece + diceRoll
+    if canMoveOut(piece,diceRoll) and numberOfEnemiesAtTile(1,enemyPieces) == 1:
+        return True
     # Piece cannot attack if at goal or approaching goal, or if the next tile is a globe, unless it is home globe
     if not isInApproachToGoal(piece) and not isInGoal(piece) and not isOnNormalGlobe(nextTile) and not isOnEnemyHomeGlobe(nextTile):
-        # If the next tile is not a star, and there is one enemy on it, the piece can attack
-        if not isOnStar(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 1:
+        # If the next tile is not a star, and there is one enemy on it, and the piece is not at home, the piece can attack
+        if not isOnStar(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 1 and not isAtHome(piece):
             return True
         # If the next tile is a star, and either of the  tiles have one enemy on it, it can attack
-        elif isOnStar(nextTile) and (numberOfEnemiesAtTile(nextTile,enemyPieces) == 1 or numberOfEnemiesAtTile(nextStar(nextTile),enemyPieces) == 1):
+        elif isOnStar(nextTile) and (numberOfEnemiesAtTile(nextTile,enemyPieces) == 1 or numberOfEnemiesAtTile(nextStar(nextTile),enemyPieces) == 1) and not isAtHome(piece):
             return True
     return False
 
@@ -343,15 +338,13 @@ def canMoveSafe(piece,otherPieces,diceRoll,enemyPieces):
     """
     nextTile = piece + diceRoll
 
-    if piece == 0 and not canMoveOut(piece,diceRoll):
-        return False
-    elif canMoveOut(piece,diceRoll):
+    if canMoveOut(piece,diceRoll):
         return True
-    elif isOnNormalGlobe(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 0:
+    elif isOnNormalGlobe(nextTile) and numberOfEnemiesAtTile(nextTile,enemyPieces) == 0 and not isAtHome(piece):
         return True
-    elif nextTile in otherPieces and nextStar(piece) != nextTile:
+    elif nextTile in otherPieces and nextStar(piece) != nextTile and not isAtHome(piece):
         return True
-    elif isInApproachToGoal(nextTile):
+    elif isInApproachToGoal(nextTile) and not isInApproachToGoal(piece):
         return True
     elif isSafeOnEnemyHomeGlobe(nextTile,enemyPieces):
         return True

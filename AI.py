@@ -147,15 +147,15 @@ sDict = {
 }
 
 # Act"ions
-#MOVEOUT = 0
-MOVESAFE = 0
-MOVESTAR = 1
-MOVEHOME = 2
-MOVEATTACK = 3
-MOVESUICIDE = 4
-MOVE = 5
-STAY = 6 # Only valid if no other actions are avaliable
-ACTIONS = [MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE,STAY]
+MOVEOUT = 0
+MOVESAFE = 1
+MOVESTAR = 2
+MOVEHOME = 3
+MOVEATTACK = 4
+MOVESUICIDE = 5
+MOVE = 6
+STAY = 7 # Only valid if no other actions are avaliable
+ACTIONS = [MOVEOUT,MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE,STAY]
 
 # Rewards
 
@@ -312,7 +312,7 @@ class AI:
         uniqueActions = list(set(chain(*actions)))
         # If the list is empty, set the piece to -1 (the piece the game needs to stay) and the index to the STAY action
         if len(uniqueActions) == 0:
-            self.action = 6
+            self.action = 7
             self.pieceToMove = -1
         else:
             # Select if the choice should be random, or max
@@ -338,10 +338,40 @@ class AI:
                         chosenAction = action
 
             # Choose the piece to which the actions is associated, or the first if there are multiple
+            # THIS SHOULD BE ALTERED TO DEPEND ON THE STATE
+
+            # Find out which pieces can be moved with the chosen action
+            avaliablePieces = []
             for index, actionList in enumerate(actions):
                 if chosenAction in actionList:
-                    chosenPiece = index
-                    break
+                    avaliablePieces.append(index)
+
+            # If more than one piece matches the chosen action, choose one based on the order of its state
+            if len(avaliablePieces) > 1:
+                maxSeverity = 7
+                for piece in avaliablePieces:
+                    if self.curState[piece] == DANGER:
+                        curSeverity = 1
+                    elif self.curState[piece] == HOME:
+                        curSeverity  = 2
+                    elif self.curState[piece] == NORMAL:
+                        curSeverity = 3
+                    elif self.curState[piece] == SAFE:
+                        curSeverity = 4
+                    elif self.curState[piece] == APPROACHGOAL:
+                        curSeverity = 5
+                    else: # GOAL
+                        curSeverity = 6
+                    if curSeverity < maxSeverity:
+                        maxSeverity = curSeverity
+                        chosenPiece = piece
+                    # A piece an't have higher severity than when it is in danger, so break out
+                    if maxSeverity == 1:
+                        break
+                    # No selection for goal, doesn't have any valid actions
+            # Pick the only piece corresponding to the action
+            else:
+                chosenPiece = avaliablePieces[0]
             self.action = chosenAction
             self.pieceToMove = chosenPiece
 
@@ -355,16 +385,18 @@ class AI:
         # Is based on the action chosen
         if self.action == MOVESAFE:
             reward += 1
-        if self.action == MOVESTAR:
+        elif self.action == MOVESTAR:
             reward += 0.5
-        if self.action == MOVEHOME:
+        elif self.action == MOVEHOME:
             reward += 0.5
-        if self.action == MOVEATTACK:
+        elif self.action == MOVEATTACK:
             reward += 0.25
-        if self.action == MOVESUICIDE:
+        elif self.action == MOVESUICIDE:
             reward -= 1
-        if self.action == MOVE or self.action == STAY:
+        elif self.action == MOVE or self.action == STAY:
             reward += 0
+        elif self.action == MOVEOUT:
+            reward += 1
         # And the next state
         # If the chosen piece is minus one, the reward is zero, since it didn't really choose it
         if self.pieceToMove == -1:
@@ -373,15 +405,15 @@ class AI:
             if self.nextState[self.pieceToMove] == HOME:
                 reward -= 0.5
             elif self.nextState[self.pieceToMove] == GOAL:
-                reward += 1
+                reward += 0.5
             elif self.nextState[self.pieceToMove] == APPROACHGOAL:
                 reward += 1
             elif self.nextState[self.pieceToMove] == DANGER:
                 reward -= 0.5
             elif self.nextState[self.pieceToMove] == SAFE:
-                reward += 0.5
+                reward += 1
             elif self.nextState[self.pieceToMove] == NORMAL:
-                reward += 0.5
+                reward += 0.75
         
         self.reward = reward
 
@@ -488,23 +520,23 @@ class AI:
 
     def getPossibleActions(self, states):
         """
-        For each state in the passed state, determine which states can actually be chosen from
+        For each state in the passed state, determine which states actions can actually be chosen from
         """
         possibleActions = []
         for state in states:
             if state == HOME:
-                possibleActions.append([MOVESAFE,MOVEATTACK])
+                possibleActions.append([MOVEOUT,MOVESAFE,MOVEATTACK])
             elif state == GOAL:
                 possibleActions.append([])
             elif state == APPROACHGOAL:
-                possibleActions.append([MOVEHOME,MOVE])
+                possibleActions.append([MOVEHOME, MOVE])
             # State is DANGER, SAFE or NORMAL
             else:
                 possibleActions.append([MOVESAFE,MOVESTAR,MOVEHOME,MOVEATTACK,MOVESUICIDE,MOVE])
         # Only return unique actions
         uniqueActions = list(set(chain(*possibleActions)))
         # If list contains only state HOME and/or state GOAL, it can also perform action STAY
-        if (HOME in uniqueActions or GOAL in uniqueActions) and APPROACHGOAL not in uniqueActions and DANGER not in uniqueActions and SAFE not in uniqueActions:
+        if (HOME in uniqueActions or GOAL in uniqueActions) and APPROACHGOAL not in uniqueActions and DANGER not in uniqueActions and SAFE not in uniqueActions and MOVEOUT not in uniqueActions:
             uniqueActions.append[STAY]
         return uniqueActions
 
@@ -518,9 +550,8 @@ class AI:
 
             # MOVEOUT
             # If a six is rolled, the piece can move out from home
-            #if canMoveOut(piece,diceRoll):
-            #    avaliableActions[index].append(MOVEOUT)
-            #    continue
+            if canMoveOut(piece,diceRoll):
+                avaliableActions[index].append(MOVEOUT)
         
             # MOVESAFE
             # If the piece can move to a space with another piece, into the goal zone or to another friendly piece
