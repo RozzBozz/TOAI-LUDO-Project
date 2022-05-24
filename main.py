@@ -15,30 +15,30 @@ numberOfGames = 1000
 # How many opponents?
 numberOfOpponents = 3
 # Is the AI playing?
-isAI = True
+isAI = False
 # Should the AI train, or just exploit the current knowledge (Q-table)?
 shouldLearn = False
-# If the AI is training, should it start from scratch?
-startFromScratch = False
 # Values for the hyper parameters of the AI (epsilon, alpha, gamma)
 parameters = [0.1, 0.5, 0.9]
 # If the human is playing, should moves be performed if they are the only choice?
-autoMove = True
+autoMove = False
 # Should the game history be saved? (Not recommended if numberOfGames > 1)
 saveGameHistory = False
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 
 # Initialization of AI/
+
+ludoAI = AI("", parameters[0], parameters[1], parameters[2])
 if isAI == True:
     QTableFileName = "QTables/epsilon{}alpha{}gamma{}.npy".format(parameters[0],parameters[1],parameters[2])
     dataFileName = "dataFiles/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
     winRatesFileName = "winRates/epsilon{}alpha{}gamma{}.txt".format(parameters[0],parameters[1],parameters[2])
     if shouldLearn:
-        ludoAI = AI(QTableFileName = QTableFileName, epsilon=parameters[0], alpha=parameters[1], gamma=parameters[2], startFromScratch=startFromScratch)
+        ludoAI = AI(QTableFileName, parameters[0], parameters[1], parameters[2])
         print("---------- Currently LEARNING with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
     else:
-        ludoAI = AI(QTableFileName = QTableFileName, epsilon=0, alpha=parameters[1], gamma=parameters[2], startFromScratch=startFromScratch)
+        ludoAI = AI(QTableFileName, 0, parameters[1], parameters[2])
         print("---------- Currently TESTING AIs trained with values epsilon", parameters[0], "alpha", parameters[1], "gamma", parameters[2], "----------")
 else:
     # To keep track of how many wins the current player has
@@ -76,8 +76,6 @@ for gameNumber in range(1,numberOfGames+1):
     
     if isAI == True:
         ludoAI.reset()
-        # Specifies, that a state update, reward calculation and Q-table update shouldn't be done in the first round
-        doSRupdate = False
 
     # Print every 100th game
     if isAI and gameNumber % 100 == 0:
@@ -118,19 +116,7 @@ for gameNumber in range(1,numberOfGames+1):
                 print(f"Dice rolled: {diceRoll}")
             
             if isAI == True:
-                    # Skip the SR-update before the first action
-                    if doSRupdate:
-                        # Start by updating the state of the AI
-                        ludoAI.updateState(pieces=playerPieces,enemyPieces=enemyPieces)
-                        if shouldLearn:
-                            # Estimate the reward for being in this state
-                            ludoAI.calculateReward(round=round,pieces=playerPieces)
-                            # Update the Q-value of the previous state
-                            ludoAI.updateQValue()
-                    doSRupdate = True
-                    # Select an action
-                    ludoAI.selectAction(diceRoll=diceRoll, pieces=playerPieces, enemyPieces=enemyPieces)
-                    pieceToMoveIndex = ludoAI.getPieceIndexMove()   
+                    pieceToMoveIndex = ludoAI.onePass(diceRoll,playerPieces,enemyPieces,shouldLearn=shouldLearn) 
             # Human player
             else:
                 # Checks if there are pieces that can be moved
@@ -152,7 +138,8 @@ for gameNumber in range(1,numberOfGames+1):
                     # No move found in autoMove
                     if pieceToMoveIndex == None:
                     # Used for debugging states and actions
-                    #print("-----Enemy pieces:-----\n", enemyPieces)
+                        print("-----Enemy pieces:-----\n", enemyPieces)
+                        print(ludoAI.getState(playerPieces,enemyPieces))
                     #for index,piece in enumerate(playerPieces):
                     #    otherPieces = np.delete(playerPieces,index)
                     #    print("Piece", index+1, "Danger: ", isInDanger(piece,otherPieces,enemyPieces))
@@ -211,7 +198,6 @@ for gameNumber in range(1,numberOfGames+1):
         ludoAI.addGamePlayed()
         if winningPlayer == playerNumber-1:
             ludoAI.addWin()
-        ludoAI.updateWinRates()
     
     if saveGameHistory == True:
         print("Saving history to numpy file")

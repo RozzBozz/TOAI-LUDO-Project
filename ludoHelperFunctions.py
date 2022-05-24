@@ -20,7 +20,7 @@ def isInApproachToGoal(piece):
     Input:  piece (int) Index of piece to check
     Output: (bool) True if in approach to the goal, False otherwise
     """
-    if piece > 52 and piece < 57:
+    if piece > 52 and piece < 59:
         return True
     else:
         return False
@@ -193,11 +193,18 @@ def isInDanger(piece,otherPieces,enemyPieces):
         return True
     return False
 
-def isSafe(pieces,otherPieces,enemyPieces):
+def isSafe(piece,otherPieces,enemyPieces):
     """
-    Inverse of isInDanger, see that fro documentation
+    Checks if a piece is safe
+    Input:  piece (int) Index of the piece
+            otherPieces (list of int) indexes of the other player pieces
+            enemyPieces (list of lists of int) List of lists of enemy piece positions in the current players frame (use enemyPieces from game.get_observation)
+    Output: (bool) True if in danger, False otherwise
     """
-    return not isInDanger(pieces,otherPieces,enemyPieces)
+    if piece in otherPieces or isOnNormalGlobe(piece) or isSafeOnEnemyHomeGlobe(piece,enemyPieces):
+        return True
+    else:
+        return False
 
 # For Actions
 
