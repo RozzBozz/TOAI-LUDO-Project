@@ -11,18 +11,18 @@ from ludoHelperFunctions import *
 # Which player number is the AI (If number 4 is chosen, it matches with the game video produced, if that is enabled)
 playerNumber = 1
 # How many games should be played for each test?
-numberOfGames = 1000
+numberOfGames = 3000
 # How many opponents?
 numberOfOpponents = 3
 # Are the enemies random players or semi smart players?
 randomEnemies = True # (NOT IMPLEMENTED)
 # Should the AI start from scratch, or just exploit the current knowledge (Q-table)?
-shouldLearn = False
+shouldLearn = True
 
 # Values to be tested
-epsilon = 0.9
-epsilonDecays = [0.2] # [%]
-alphas = [0.2] # 
+epsilon = 1
+epsilonDecays = [0.1] # [%]
+alphas = [0.5] # 
 gammas = [0.8] # 
 
 for epsilonDecay in epsilonDecays:
