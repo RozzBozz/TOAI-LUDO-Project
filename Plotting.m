@@ -111,3 +111,19 @@ data1 = myTable1{:,:};
 myTable2 = readtable(filepath2);
 data2 = myTable2{:,:};
 [h,p] = ttest2(data1(:,end),data2(:,end))
+
+%% Plotting results vs 3xMads AI. Version was trained againt three
+% semi-random opponents
+
+filepath = "dataAnalysis/winPercentageAgainst3Mads.txt";
+myTable = readtable(filepath);
+data = myTable{:,:}';
+avgWinRate = mean(data);
+stdDev = std(avgWinRate);
+f = figure(1);
+hold on
+plot(1:size(avgWinRate,2),avgWinRate)
+title(strcat('Trained on 1 player, played versus 3 Mads AIs trained on three Semi-random players WR:', num2str(avgWinRate(end)),'% ±',num2str(stdDev)))
+f.Position = [300,300,600,500];
+xlabel('Episode number')
+ylabel('Average cumulative win rate [%]')

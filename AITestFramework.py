@@ -28,7 +28,7 @@ gammas = [0.4] #
 for epsilonDecay in epsilonDecays:
     for alpha in alphas:
         for gamma in gammas:
-            for i in range(0,10):
+            for i in range(0,1):
                 # Initialization of AI
                 if shouldLearn:
                     QTableFileName = "QTables/epsilonDecay{}alpha{}gamma{}.npy".format(epsilonDecay,alpha,gamma)
